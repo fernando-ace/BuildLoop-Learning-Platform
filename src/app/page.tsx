@@ -13,22 +13,19 @@ import {
   skillScores,
   type MissionState,
   type TestId,
+  mission1Definition,
+  testLabelText,
 } from "@/lib/mission";
-import { dispatchMission, getMissionState, getServerMissionState, subscribeMission } from "@/lib/store";
+import { dispatchMission, getLearnerProgress, getMissionState, getServerLearnerProgress, getServerMissionState, subscribeMission } from "@/lib/store";
+import { learnerSkills, skillLabel, type LearnerProgress } from "@/lib/learner";
 import type { MissionAction } from "@/lib/reducer";
+import { ChoiceList } from "@/app/components/choice-list";
 
 const subscribeToHydration = () => () => {};
 const clientReadySnapshot = () => true;
 const serverReadySnapshot = () => false;
-const progressStages = ["Meet Ari", "Define", "MVP", "Brief", "Build", "Test", "Feedback", "Iterate", "Ship"];
-const issueLabels: Record<string, string> = {
-  "blank-name": "Blank borrower names are accepted",
-  "double-checkout": "An already borrowed item can be checked out again",
-  "return-confusing": "The Return action is hard to spot",
-  persistence: "Changes disappear after a refresh",
-  "extra-feature": "The AI added an extra feature you did not ask for",
-};
-
+const progressStages = mission1Definition.steps.map((step) => step.label);
+const buildIssueLabels: Readonly<Record<string, string>> = mission1Definition.consequences.buildIssues;
 function RestoreMission({ state, onReset }: { state: MissionState; onReset: () => void }) {
   if (state.stage === 0) return null;
   return (
@@ -38,27 +35,30 @@ function RestoreMission({ state, onReset }: { state: MissionState; onReset: () =
   );
 }
 
-function Welcome({ onStart }: { onStart: () => void }) {
-  return (
-    <main className="welcome-wrap">
-      <section className="welcome-copy">
-        <div className="welcome-logo" aria-label="BuildLoop">build<span>loop</span><i /></div>
-        <p className="welcome-kicker">MISSION 01 <span>·</span> PRODUCT BUILDER</p>
-        <h1>Help Ari find<br />the missing cameras.</h1>
-        <p className="welcome-description">The photography club keeps losing track of its gear. You’ll work with Ari, direct an AI developer, and test what gets built.</p>
-        <div className="welcome-meta"><span>About 20 minutes</span><span className="meta-dot" /><span>No coding needed</span></div>
-        <button className="button button-primary button-large" onClick={onStart} type="button">Start the mission <span aria-hidden="true">→</span></button>
+function MissionHub({ state, progress, onStart }: { state: MissionState; progress: LearnerProgress; onStart: () => void }) {
+  const isInProgress = state.stage > 0 && !state.shipped;
+  const status = isInProgress ? "In progress" : progress.completed ? "Completed" : "Not started";
+  const latest = new Map(progress.latestSkillResults.map((skill) => [skill.name, skill]));
+  return <div className="hub-shell">
+    <header className="hub-topbar"><div className="brand">build<span>loop</span><i /></div><span className="hub-local">Your progress is saved on this device</span></header>
+    <main className="hub-main">
+      <section className="hub-intro"><p className="eyebrow">YOUR MISSION HUB</p><h1>Learn to build real things with AI.</h1><p>Make decisions, see what happens, and practice taking an idea all the way to a working product.</p></section>
+      <section className="learner-progress" aria-label="Learner progress"><div><span className="eyebrow">YOUR PROGRESS</span><strong>{progress.completed ? "1 of 2 missions complete" : isInProgress ? "Mission 1 in progress" : "Your learning journey starts here"}</strong></div><span>{progress.attempts} {progress.attempts === 1 ? "attempt" : "attempts"}</span><div className="hub-progress-track" aria-label={`${progress.completed ? 50 : 0}% mission progress`}><span style={{ width: `${progress.completed ? 50 : 0}%` }} /></div></section>
+      <section className="mission-cards" aria-label="Missions">
+        <article className="hub-mission-card">
+          <div className="hub-card-top"><span className="mission-number">MISSION {mission1Definition.metadata.number}</span><span className={`mission-status ${isInProgress ? "is-progress" : progress.completed ? "is-completed" : ""}`}>{status}</span></div>
+          <h2>{mission1Definition.metadata.title}</h2><p className="mission-description">{mission1Definition.metadata.description}</p>
+          <div className="hub-skills"><span className="eyebrow">YOU’LL PRACTICE</span><div><span>Understand the user</span><span>Find the real problem</span><span>Choose an MVP</span><span>Test and improve</span></div></div>
+          <div className="hub-card-footer"><span>{progress.completed ? `Completed · ${progress.attempts} ${progress.attempts === 1 ? "attempt" : "attempts"}` : `About ${mission1Definition.metadata.estimatedMinutes} minutes · No coding needed`}</span><button className="button button-primary" onClick={onStart} type="button">{isInProgress ? "Continue Mission" : progress.completed ? "Replay Mission" : "Start Mission"}<span aria-hidden="true">→</span></button></div>
+        </article>
+        <article className="hub-locked-card" aria-label="Mission 2 locked"><span className="locked-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><rect x="5" y="10" width="14" height="11" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3" /></svg></span><span className="mission-number">MISSION 2</span><h2>Locked for now</h2><p>Complete Mission 1 to continue your journey.</p><span className="locked-label">COMING NEXT</span></article>
       </section>
-      <aside className="welcome-side" aria-label="Mission preview">
-        <div className="camera-card">
-          <div className="camera-frame"><div className="camera-body"><div className="camera-top" /><div className="lens-outer"><div className="lens-inner" /></div><div className="camera-flash" /></div></div>
-          <div className="camera-caption"><div><span className="eyebrow">THE CHALLENGE</span><strong>Where’s the camera?</strong></div><span className="caption-arrow">↗</span></div>
-        </div>
-        <div className="side-note"><span className="note-rule" /><p>Understand first.<br /><strong>Build with purpose.</strong></p></div>
-        <span className="decorative-index" aria-hidden="true">01 / 01</span>
-      </aside>
+      <section className="skill-progress"><div className="skill-heading"><div><span className="eyebrow">SKILLS YOU’RE BUILDING</span><h2>Small steps add up.</h2></div>{progress.completed && <span className="skill-note">Based on your latest attempt</span>}</div><div className="skill-list">{learnerSkills.map((name) => {
+        const score = latest.get(name)?.score;
+        return <div className="hub-skill" key={name}><div><strong>{name}</strong><span>{score === undefined ? "Not practiced yet" : skillLabel(score)}</span></div><div className="skill-track"><span style={{ width: `${score ?? 0}%` }} /></div></div>;
+      })}</div>{progress.completed && progress.latestSkillResults.length > 0 && <p className="skill-disclaimer">These are gameplay signals based on your choices, not a formal assessment.</p>}</section>
     </main>
-  );
+  </div>;
 }
 
 function ProgressHeader({ state, onReset }: { state: MissionState; onReset: () => void }) {
@@ -117,21 +117,20 @@ function StageContinue({ children, disabled = false, onClick }: { children: Reac
 
 function Discovery({ state, dispatch }: { state: MissionState; dispatch: Dispatch<MissionAction> }) {
   const [selected, setSelected] = useState("");
-  const [answer, setAnswer] = useState("");
-  const [insight, setInsight] = useState("");
   const asked = state.questionsAsked.length;
+  const character = mission1Definition.characters[0];
+  const lastQuestion = questionCatalog.find((question) => question.id === state.questionsAsked.at(-1));
   const ask = () => {
     if (!selected || asked >= 3) return;
     const question = questionCatalog.find((item) => item.id === selected);
     if (!question) return;
-    setAnswer(question.answer); setInsight(question.insight);
     dispatch({ type: "ASK", question: question.id });
     setSelected("");
   };
   return <>
-    <StageHeading eyebrow="STEP 01 · MEET THE USER" title="Meet Ari." description="Ari runs the photography club. Ask up to three questions to understand what’s getting in the way." />
-    <div className="ari-message"><div className="ari-avatar">A</div><div className="message-copy"><span className="speaker-name">Ari <span>· Photography club officer</span></span><p>We keep track in the group chat, but nobody can tell who has the camera.</p></div></div>
-    {answer && <div className="answer-card" aria-live="polite"><span className="answer-label">ARI SAYS</span><p>{answer}</p><span className="answer-insight">↳ {insight}</span></div>}
+    <StageHeading eyebrow="STEP 01 · MEET THE USER" title={`Meet ${character.name}.`} description={`${character.name} runs the photography club. Ask up to three questions to understand what’s getting in the way.`} />
+    <div className="ari-message"><div className="ari-avatar">{character.name[0]}</div><div className="message-copy"><span className="speaker-name">{character.name} <span>· {character.role}</span></span><p>{character.introduction}</p></div></div>
+    {lastQuestion && <div className="answer-card" aria-live="polite"><span className="answer-label">ARI SAYS</span><p>{lastQuestion.answer}</p><span className="answer-insight">↳ {lastQuestion.insight}</span></div>}
     <div className="choice-heading"><div><span className="eyebrow">{asked < 3 ? `${3 - asked} QUESTIONS LEFT` : "YOU’VE HEARD FROM ARI"}</span><h2>{asked >= 3 ? "What did you learn?" : "What do you want to ask?"}</h2></div><span className="question-count">{String(asked).padStart(2, "0")} / 03</span></div>
     <div className="choice-list">{questionCatalog.map((question) => {
       const alreadyAsked = state.questionsAsked.includes(question.id);
@@ -150,7 +149,7 @@ function ProblemStage({ state, dispatch }: { state: MissionState; dispatch: Disp
   const selected = problemOptions.find((option) => option.id === state.problemChoice);
   return <>
     <StageHeading eyebrow="STEP 02 · DEFINE THE PROBLEM" title="What needs fixing?" description="Pick the statement that best describes Ari’s problem. Specific problems lead to more useful solutions." />
-    <div className="selection-list">{problemOptions.map((option, index) => <button key={option.id} className={`selection-card${state.problemChoice === option.id ? " is-selected" : ""}`} onClick={() => dispatch({ type: "SELECT_PROBLEM", problem: option.id })} type="button" aria-pressed={state.problemChoice === option.id}><span className="selection-index">0{index + 1}</span><span className="selection-text">{option.text}</span><span className="selection-radio" /></button>)}</div>
+    <ChoiceList label="Choose the problem that best describes Ari’s need" options={problemOptions.map((option) => ({ id: option.id, label: option.text }))} value={state.problemChoice} onChange={(problem) => dispatch({ type: "SELECT_PROBLEM", problem })} />
     {selected && <div className="inline-feedback"><span className="feedback-mark">↗</span><p>{selected.reason}</p></div>}
     <StageContinue disabled={!state.problemChoice} onClick={() => dispatch({ type: "ADVANCE" })}>Choose an MVP</StageContinue>
   </>;
@@ -158,11 +157,11 @@ function ProblemStage({ state, dispatch }: { state: MissionState; dispatch: Disp
 
 function ScopeStage({ state, dispatch }: { state: MissionState; dispatch: Dispatch<MissionAction> }) {
   const cost = costOf(state.selectedFeatures);
-  const overBudget = cost > 7;
+  const overBudget = cost > mission1Definition.scoring.featureBudget;
   const allCore = featureCatalog.filter((item) => item.core).every((item) => state.selectedFeatures.includes(item.id));
   return <>
     <StageHeading eyebrow="STEP 03 · SCOPE THE MVP" title="Spend your build budget." description="Choose what the first version needs. Your budget is tight on purpose: focus on proving the useful behavior." />
-    <div className="budget-bar"><div><span className="eyebrow">BUILD BUDGET</span><strong>{7 - cost} <span>of 7 points left</span></strong></div><div className="budget-blocks" aria-label={`${cost} of 7 budget points used`}>{Array.from({ length: 7 }, (_, i) => <span className={i < cost ? "is-used" : ""} key={i} />)}</div></div>
+    <div className="budget-bar"><div><span className="eyebrow">BUILD BUDGET</span><strong>{mission1Definition.scoring.featureBudget - cost} <span>of {mission1Definition.scoring.featureBudget} points left</span></strong></div><div className="budget-blocks" aria-label={`${cost} of ${mission1Definition.scoring.featureBudget} budget points used`}>{Array.from({ length: mission1Definition.scoring.featureBudget }, (_, i) => <span className={i < cost ? "is-used" : ""} key={i} />)}</div></div>
     <div className="feature-list">{featureCatalog.map((feature) => {
       const checked = state.selectedFeatures.includes(feature.id);
       return <button key={feature.id} className={`feature-row${checked ? " is-selected" : ""}`} onClick={() => dispatch({ type: "TOGGLE_FEATURE", feature: feature.id })} type="button" aria-pressed={checked}>
@@ -189,8 +188,8 @@ function BuildStage({ state, dispatch }: { state: MissionState; dispatch: Dispat
   const quality = state.promptQuality;
   return <>
     <StageHeading eyebrow="STEP 05 · AI BUILD" title="The AI says it’s done." description="Your developer built a first version from your brief. Before you trust the handoff, take a look at what’s actually there." />
-    <div className="build-status"><span className="status-icon">✓</span><div><strong>First version ready</strong><span>Build time · 42 seconds</span></div><span className="status-tag">BUILD COMPLETE</span></div>
-    <div className="build-review"><div className="review-heading"><span className="eyebrow">IMPLEMENTATION NOTES</span><span className="review-score">BRIEF {quality.total} / 100</span></div><p className="review-summary">The AI made an equipment tracker based on your instructions.</p><div className="review-split"><div className="review-column"><span className="review-label">INCLUDED</span>{state.selectedFeatures.map((id) => <span className="review-line" key={id}><i />{featureCatalog.find((feature) => feature.id === id)?.label}</span>)}</div><div className="review-column warning-column"><span className="review-label">NEEDS A LOOK</span>{state.buildIssues.map((issue) => <span className="review-line" key={issue}><i />{issueLabels[issue]}</span>)}{!state.buildIssues.length && <span className="review-line"><i />No obvious gaps in the brief.</span>}</div></div></div>
+    <div className="build-status"><span className="status-icon">✓</span><div><strong>The developer followed your brief.</strong><span>Your instructions shaped what was built.</span></div><span className="status-tag">BUILD COMPLETE</span></div>
+    <div className="build-review"><div className="review-heading"><span className="eyebrow">IMPLEMENTATION NOTES</span><span className="review-score">BRIEF {quality.total} / 100</span></div><p className="review-summary">The AI made an equipment tracker based on your instructions.</p><div className="review-split"><div className="review-column"><span className="review-label">INCLUDED</span>{state.selectedFeatures.map((id) => <span className="review-line" key={id}><i />{featureCatalog.find((feature) => feature.id === id)?.label}</span>)}</div><div className="review-column warning-column"><span className="review-label">NEEDS A LOOK</span>{state.buildIssues.map((issue) => <span className="review-line" key={issue}><i />{buildIssueLabels[issue] ?? issue}</span>)}{!state.buildIssues.length && <span className="review-line"><i />No obvious gaps in the brief.</span>}</div></div></div>
     <div className="callout-strip"><span>!</span><p>AI can build quickly. <strong>You’re still responsible for checking the result.</strong></p></div>
     <StageContinue onClick={() => dispatch({ type: "ADVANCE" })}>Open the product</StageContinue>
   </>;
@@ -225,7 +224,7 @@ function TestStage({ state, dispatch }: { state: MissionState; dispatch: Dispatc
       <div className="test-list">{testCases.map((test) => {
         const result = state.testResults[test.id];
         const ran = state.testsRun.includes(test.id);
-        return <div className={`test-row${ran ? result?.passed ? " is-pass" : " is-fail" : ""}`} key={test.id}><div className="test-state">{ran ? result?.passed ? "✓" : "!" : "·"}</div><div className="test-copy"><span className="test-category">{test.category}</span><strong>{test.label}</strong><span>{ran ? result?.detail : test.description}</span></div><button className={`test-button${ran ? " has-run" : ""}`} onClick={() => dispatch({ type: "RUN_TEST", test: test.id })} type="button">{ran ? "Run again" : "Run test"}</button></div>;
+        return <div className={`test-row${ran ? result?.passed ? " is-pass" : " is-fail" : ""}`} key={test.id}><div className="test-state">{ran ? result?.passed ? "✓" : "!" : "·"}</div><div className="test-copy"><span className="test-category">{test.category}</span><strong>{testLabelText[test.id]}</strong><span>{ran ? result?.detail : test.description}</span></div><button className={`test-button${ran ? " has-run" : ""}`} onClick={() => dispatch({ type: "RUN_TEST", test: test.id })} type="button">{ran ? "Run again" : "Run test"}</button></div>;
       })}</div>
     </div>
     <StageContinue onClick={() => dispatch({ type: "ADVANCE" })}>See what Ari thinks</StageContinue>
@@ -257,7 +256,7 @@ function IterationStage({ state, dispatch }: { state: MissionState; dispatch: Di
   const evidence = state.iterationChoice === "blank" ? state.iterationTested ? "The invalid checkout test now passes." : "Retest a blank checkout to confirm the fix." : state.iterationChoice === "return" ? state.iterationTested ? "Ari can spot Return without searching." : "Watch Ari find Return, then test the return flow." : "No test shows this change solved Ari’s main problem.";
   return <>
     <StageHeading eyebrow="STEP 08 · CHOOSE AN ITERATION" title="What should change first?" description="Pick one improvement. Keep the working parts and focus on what the evidence says." />
-    <div className="iteration-list">{iterationOptions.map((option, index) => <button key={option.id} className={`iteration-row${state.iterationChoice === option.id ? " is-selected" : ""}`} onClick={() => dispatch({ type: "SELECT_ITERATION", iteration: option.id })} type="button" aria-pressed={state.iterationChoice === option.id}><span className="selection-index">0{index + 1}</span><span className="iteration-text"><strong>{option.text}</strong><small>Evidence: {option.signal}</small></span><span className="selection-radio" /></button>)}</div>
+    <ChoiceList label="Choose an iteration based on the evidence" options={iterationOptions.map((option) => ({ id: option.id, label: option.text, detail: option.signal }))} value={state.iterationChoice} onChange={(iteration) => dispatch({ type: "SELECT_ITERATION", iteration })} variant="iteration" />
     {chosen && <div className="iteration-preview"><div className="iteration-preview-head"><span className="eyebrow">{state.iterationTested ? "SECOND BUILD · READY TO REVIEW" : "FOCUSED UPDATE"}</span><span className="kept-label">{state.iterationTested ? "IMPLEMENTED FROM YOUR CHOICE" : "KEEPING THE REST OF THE APP"}</span></div><div className="before-after"><div><span className="eyebrow">BEFORE</span><p>{before}</p></div><span className="change-arrow">→</span><div><span className="eyebrow">AFTER</span><p>{after}</p></div></div>{state.iterationTested && <div className="second-build-preview">{state.iterationChoice === "return" ? <><div><span className="gear-mark">◉</span><span><strong>Canon EOS M50</strong><small>With Ari</small></span></div><button className="small-action is-prominent" type="button" tabIndex={-1}>Return</button></> : state.iterationChoice === "blank" ? <><span className="blank-preview">Borrower name is required</span><span className="blocked-action">Check out · blocked</span></> : <><span className="feature-added">{chosen.text}</span><span className="feature-added-note">The core return task remains unchanged.</span></>}</div>}<div className={`evidence-line${state.iterationTested && state.iterationChoice === "return" || state.iterationTested && state.iterationChoice === "blank" ? " is-verified" : ""}`}><span>{state.iterationTested && ["return", "blank"].includes(state.iterationChoice) ? "✓" : "↗"}</span><p><strong>Evidence:</strong> {evidence}</p></div></div>}
     {!state.iterationTested ? <StageContinue disabled={!chosen} onClick={() => dispatch({ type: "RETEST" })}>Retest the change</StageContinue> : <div className="continue-row"><span className="continue-hint">The focused change is checked and ready.</span><button className="button button-primary" onClick={() => dispatch({ type: "SHIP" })} type="button">Ship the product <span aria-hidden="true">→</span></button></div>}
   </>;
@@ -269,9 +268,10 @@ function ResultsStage({ state, dispatch }: { state: MissionState; dispatch: Disp
   return <>
     <StageHeading eyebrow="STEP 09 · SHIP IT" title="You shipped something useful." description="You took Ari’s problem from first conversation to a tested product. Here’s what you learned by doing it." />
     <div className="ship-banner"><span className="ship-check">✓</span><div><strong>Mission complete</strong><span>The Missing Cameras · First version shipped</span></div><span className="ship-date">BUILDLOOP / 01</span></div>
-    <div className="score-section"><div className="section-label"><span className="eyebrow">YOUR BUILDER SKILLS</span><span>Based on the choices you made</span></div><div className="score-grid">{scores.map((item) => <article className="score-card" key={item.name}><div className="score-top"><h2>{item.name}</h2><strong>{item.score}<span> / 100</span></strong></div><div className="score-track"><span style={{ width: `${item.score}%` }} /></div><p>{item.explanation}</p></article>)}</div></div>
-    <details className="summary-details" open><summary><span>Builder summary</span><span className="summary-expand">MISSION RECORD · 01</span></summary><div className="summary-grid"><SummaryItem label="USER" value={summary.user} /><SummaryItem label="PROBLEM" value={summary.problem} /><SummaryItem label="MVP" value={summary.mvp.length ? summary.mvp.join(" · ") : "No features selected"} /><SummaryItem label="TESTS RUN" value={summary.tests.length ? summary.tests.map((test) => `${test.name} (${test.result?.passed ? "passed" : "found an issue"})`).join(" · ") : "No tests run"} /><SummaryItem label="FEEDBACK" value={summary.feedback.length ? summary.feedback.join(" · ") : "No feedback selected"} /><SummaryItem label="ITERATION" value={summary.iteration} /><SummaryItem label="WHY THIS CHANGE" value={summary.iterationReason} /></div><div className="summary-equipment"><span className="eyebrow">FINAL PRODUCT STATE</span>{summary.finalEquipment.map((item) => <span key={item.name}>{item.name}<strong>{item.borrower}</strong></span>)}</div></details>
-    <div className="result-actions"><span>Your mission progress is saved on this device.</span><button className="button button-quiet" onClick={() => dispatch({ type: "RESET" })} type="button">Play again ↺</button></div>
+    <div className="score-section"><div className="section-label"><span className="eyebrow">YOUR BUILDER SKILLS</span><span>Based on the choices you made</span></div><div className="score-grid">{scores.map((item) => <article className="score-card" key={item.name}><div className="score-top"><h2>{item.name}</h2><strong>{skillLabel(item.score)}</strong></div><div className="score-track"><span style={{ width: `${item.score}%` }} /></div><p>{item.explanation}</p></article>)}</div></div>
+    <details className="summary-details" open><summary><span>Builder summary</span><span className="summary-expand">YOUR MISSION RECORD · ATTEMPT {getLearnerProgress().currentAttempt}</span></summary><div className="summary-grid"><SummaryItem label="USER" value={summary.user} /><SummaryItem label="PROBLEM YOU IDENTIFIED" value={summary.problem} /><SummaryItem label="MVP YOU CHOSE" value={summary.mvp.length ? summary.mvp.join(" · ") : "No features selected"} /><SummaryItem label="WHAT YOU TOLD THE AI" value={summary.brief} /><SummaryItem label="WHAT THE AI BUILT" value={summary.buildOutcome} /><SummaryItem label="WHAT HAPPENED IN TESTS" value={summary.tests.length ? summary.tests.map((test) => `${test.name}: ${test.result?.detail ?? "not recorded"}`).join(" · ") : "No tests run"} /><SummaryItem label="FEEDBACK YOU NOTICED" value={summary.feedback.length ? summary.feedback.join(" · ") : "No feedback selected"} /><SummaryItem label="FEEDBACK YOU ACTED ON" value={summary.feedbackActedOn} /><SummaryItem label="CHANGE YOU MADE" value={summary.changeMade} /><SummaryItem label="WHAT YOU SHIPPED" value={summary.shipped} /></div><div className="summary-equipment"><span className="eyebrow">FINAL PRODUCT STATE</span>{summary.finalEquipment.map((item) => <span key={item.name}>{item.name}<strong>{item.borrower}</strong></span>)}</div></details>
+    <section className="lesson-section"><span className="eyebrow">WHAT YOUR CHOICES TAUGHT YOU</span><div>{summary.lessons.map((lesson) => <p key={lesson}><span aria-hidden="true">↗</span>{lesson}</p>)}</div></section>
+    <div className="result-actions"><span>Your mission and skill progress are saved on this device.</span><button className="button button-quiet" onClick={() => dispatch({ type: "START" })} type="button">Replay Mission <span aria-hidden="true">↺</span></button><button className="button button-primary" onClick={() => dispatch({ type: "RESET" })} type="button">Return to Missions <span aria-hidden="true">→</span></button></div>
   </>;
 }
 
@@ -282,8 +282,9 @@ function SummaryItem({ label, value }: { label: string; value: string }) {
 export default function MissionPage() {
   const hydrated = useSyncExternalStore(subscribeToHydration, clientReadySnapshot, serverReadySnapshot);
   const state = useSyncExternalStore(subscribeMission, getMissionState, getServerMissionState);
+  const learnerProgress = useSyncExternalStore(subscribeMission, getLearnerProgress, getServerLearnerProgress);
   const dispatch = dispatchMission;
-  if (state.stage === 0) return <div data-hydrated={hydrated}><Welcome onStart={() => dispatch({ type: "START" })} /></div>;
+  if (state.stage === 0) return <div data-hydrated={hydrated}><MissionHub state={state} progress={learnerProgress} onStart={() => dispatch({ type: "START" })} /></div>;
   let stageView: ReactNode;
   switch (state.stage) {
     case 1: stageView = <Discovery state={state} dispatch={dispatch} />; break;

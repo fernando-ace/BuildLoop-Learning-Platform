@@ -327,6 +327,59 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, summary:focus
 .loading-screen > i { position: static; display: block; margin: 14px 0 0 -4px; }
 .loading-copy { margin-left: 15px; color: #919aa6; font-family: 'DM Sans', sans-serif; font-size: 11px; font-weight: 400; letter-spacing: 0; }
 
+.hub-shell { min-height: 100vh; padding: 0 48px 64px; }
+.hub-topbar { display: flex; max-width: 1360px; min-height: 72px; align-items: center; justify-content: space-between; margin: 0 auto; border-bottom: 1px solid var(--line); }
+.hub-local { color: var(--muted); font-size: 12px; }
+.hub-main { width: min(100%, 1120px); margin: 0 auto; }
+.hub-intro { padding: 43px 0 24px; }
+.hub-intro h1 { max-width: 780px; margin: 7px 0 8px; font-family: 'Manrope', sans-serif; font-size: clamp(34px, 4vw, 48px); font-weight: 700; letter-spacing: -2px; line-height: 1.12; }
+.hub-intro > p:last-child { max-width: 650px; margin: 0; color: var(--muted); font-size: 15px; }
+.learner-progress { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 10px 22px; margin-bottom: 20px; padding: 17px 19px; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+.learner-progress > div:first-child { display: flex; flex-direction: column; gap: 2px; }
+.learner-progress strong { font-family: 'Manrope', sans-serif; font-size: 14px; }
+.learner-progress > span { color: var(--muted); font-size: 11px; }
+.hub-progress-track, .skill-track { height: 7px; overflow: hidden; border-radius: 99px; background: #e9edf2; }
+.hub-progress-track { grid-column: 1 / -1; }
+.hub-progress-track span, .skill-track span { display: block; height: 100%; border-radius: inherit; background: var(--blue); transition: width .25s ease; }
+.mission-cards { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(250px, .8fr); gap: 17px; }
+.hub-mission-card, .hub-locked-card, .skill-progress { min-width: 0; border: 1px solid var(--line); border-radius: 11px; background: #fff; }
+.hub-mission-card { display: flex; flex-direction: column; padding: 24px 26px 22px; }
+.hub-card-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.mission-number { color: #7e8794; font-size: 9px; font-weight: 700; letter-spacing: 1px; }
+.mission-status { padding: 5px 9px; border-radius: 99px; background: #f0f2f5; color: #66717e; font-size: 10px; font-weight: 600; }
+.mission-status.is-progress { background: var(--blue-soft); color: var(--blue); }
+.mission-status.is-completed { background: #edf6f1; color: var(--green); }
+.hub-mission-card h2 { margin: 15px 0 5px; font-family: 'Manrope', sans-serif; font-size: 28px; letter-spacing: -1px; line-height: 1.2; }
+.mission-description { max-width: 580px; margin: 0; color: var(--muted); font-size: 13px; }
+.hub-skills { margin-top: 18px; padding-top: 15px; border-top: 1px solid #edf0f4; }
+.hub-skills > div { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
+.hub-skills > div span { padding: 6px 9px; border-radius: 6px; background: #f2f5f8; color: #505c6b; font-size: 10px; }
+.hub-card-footer { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 22px; padding-top: 16px; border-top: 1px solid #edf0f4; }
+.hub-card-footer > span { color: #838d9b; font-size: 10px; }
+.hub-locked-card { display: flex; min-height: 250px; flex-direction: column; align-items: center; justify-content: center; padding: 22px; border-style: dashed; background: #fafbfd; text-align: center; }
+.locked-icon { display: grid; width: 43px; height: 43px; place-items: center; margin-bottom: 13px; border-radius: 50%; background: #eff2f6; color: #687486; font-size: 22px; }
+.locked-icon svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.7; }
+.hub-locked-card h2 { margin: 6px 0 4px; font-family: 'Manrope', sans-serif; font-size: 20px; letter-spacing: -.6px; }
+.hub-locked-card p { max-width: 230px; margin: 0; color: #7d8795; font-size: 12px; }
+.locked-label { margin-top: 16px; color: #97a0ad; font-size: 8px; font-weight: 700; letter-spacing: 1px; }
+.skill-progress { margin-top: 17px; padding: 21px 23px 18px; }
+.skill-heading { display: flex; align-items: end; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+.skill-heading h2 { margin: 4px 0 0; font-family: 'Manrope', sans-serif; font-size: 19px; letter-spacing: -.5px; }
+.skill-note { color: #87919e; font-size: 10px; }
+.skill-list { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 19px 22px; }
+.hub-skill { min-width: 0; }
+.hub-skill > div:first-child { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 7px; }
+.hub-skill strong { overflow: hidden; color: #36414f; font-size: 10px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.hub-skill > div:first-child span { flex: 0 0 auto; color: #87919e; font-size: 9px; }
+.skill-track { height: 5px; }
+.skill-disclaimer { margin: 14px 0 0; color: #929aa6; font-size: 9px; }
+.lesson-section { margin-top: 17px; padding: 16px; border: 1px solid #dfe6f1; border-radius: 8px; background: #f8fafe; }
+.lesson-section > div { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 11px; }
+.lesson-section p { display: flex; gap: 8px; margin: 0; color: #596678; font-size: 11px; line-height: 1.5; }
+.lesson-section p > span { color: var(--blue); }
+.result-actions { flex-wrap: wrap; }
+.result-actions > span { flex: 1 1 100%; }
+
 @media (min-width: 1500px) {
   .app-shell { padding-right: 64px; padding-left: 64px; }
 }
@@ -339,6 +392,25 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, summary:focus
   .feature-list { grid-template-columns: 1fr; }
 }
 @media (max-width: 760px) {
+  .hub-shell { padding: 0 15px 30px; }
+  .hub-topbar { min-height: 61px; }
+  .hub-local { max-width: 145px; font-size: 9px; text-align: right; }
+  .hub-intro { padding: 31px 0 18px; }
+  .hub-intro h1 { font-size: clamp(31px, 9vw, 39px); letter-spacing: -1.5px; }
+  .hub-intro > p:last-child { font-size: 12px; }
+  .learner-progress { padding: 13px; }
+  .mission-cards { grid-template-columns: 1fr; gap: 11px; }
+  .hub-mission-card { padding: 19px 17px 16px; }
+  .hub-mission-card h2 { font-size: 24px; }
+  .hub-card-footer { align-items: stretch; flex-direction: column; gap: 10px; }
+  .hub-card-footer .button { width: 100%; }
+  .hub-locked-card { min-height: 195px; }
+  .skill-progress { padding: 17px 15px; }
+  .skill-list { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 12px; }
+  .skill-heading { align-items: flex-start; flex-direction: column; gap: 4px; }
+  .lesson-section > div { grid-template-columns: 1fr; gap: 8px; }
+  .result-actions { align-items: stretch; }
+  .result-actions .button { flex: 1 1 100%; }
   .app-shell { padding: 0 14px 25px; }
   .topbar { grid-template-columns: auto minmax(0, 1fr) auto; min-height: 62px; column-gap: 10px; }
   .brand { font-size: 20px; }
