@@ -1,7 +1,7 @@
 import type { SkillScore } from "../learner";
 
 export const mission3Definition = {
-  metadata: { id: "one-prompt-wont-do-it", number: 3, title: "One Prompt Won’t Do It", description: "Work with an AI developer in small steps: guide the build, inspect it, make a focused change, and test again.", estimatedMinutes: 14 },
+  metadata: { id: "one-prompt-wont-do-it", number: 3, title: "Build, Try, Improve", description: "Give the Builder a clear goal, try the result, and share what should change.", estimatedMinutes: 14 },
   steps: ["Meet Sam", "Guide the first build", "Test version 1", "Give a follow-up", "Review the changes", "Retest", "Choose what ships", "Builder summary"],
   skills: ["User understanding", "AI communication", "Iteration", "Testing", "Scope", "Reviewing AI work"],
   prompts: [

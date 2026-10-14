@@ -17,7 +17,7 @@ async function seedMission2Complete(page: import("@playwright/test").Page) {
 
 async function startMission3(page: import("@playwright/test").Page) {
   await page.getByRole("article", { name: "Mission 3" }).getByRole("button", { name: /Start Mission/ }).click();
-  await expect(page.getByRole("heading", { name: "One prompt won’t do it." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Build, try, improve." })).toBeVisible();
   await page.getByRole("button", { name: "Choose your first instruction" }).click();
 }
 
@@ -35,13 +35,13 @@ test("Mission 3 unlocks after Mission 2, resumes, reviews, retests, and replays 
   await page.evaluate(() => localStorage.clear());
   await page.reload();
   await expect(page.getByRole("article", { name: /Mission 3 locked/ })).toContainText("Complete Mission 2 to continue");
-  await expect(page.locator(".mission-number").allTextContents()).resolves.toEqual(["MISSION 1", "MISSION 2", "MISSION 3"]);
+  await expect(page.locator(".mission-number").allTextContents()).resolves.toEqual(["MISSION 1", "MISSION 2", "MISSION 3", "MISSION 4"]);
   let hubWidth = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth }));
   expect(hubWidth.scroll).toBeLessThanOrEqual(hubWidth.client);
 
   await seedMission2Complete(page);
   const card = page.getByRole("article", { name: "Mission 3" });
-  await expect(card).toContainText("One Prompt Won’t Do It");
+  await expect(card).toContainText("Build, Try, Improve");
   await expect(card.getByRole("button", { name: /Start Mission/ })).toBeVisible();
   hubWidth = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth }));
   expect(hubWidth.scroll).toBeLessThanOrEqual(hubWidth.client);
@@ -80,7 +80,7 @@ test("Mission 3 unlocks after Mission 2, resumes, reviews, retests, and replays 
   expect(after.mission2Progress.attempts).toHaveLength(1);
   await page.getByRole("button", { name: "Return to Missions" }).click();
   await page.getByRole("article", { name: "Mission 3" }).getByRole("button", { name: /Replay Mission/ }).click();
-  await expect(page.getByRole("heading", { name: "One prompt won’t do it." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Build, try, improve." })).toBeVisible();
   after = await page.evaluate(() => JSON.parse(localStorage.getItem("buildloop-learner-v2") || "{}"));
   expect(after.mission3State.stage).toBe(1);
   expect(after.mission3Progress.attempts).toHaveLength(1);

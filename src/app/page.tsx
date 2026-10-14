@@ -16,7 +16,7 @@ import {
   mission1Definition,
   testLabelText,
 } from "@/lib/mission";
-import { dispatchMission, getActiveMission, getLearnerProgress, getMission2Progress, getMission2State, getMission3Progress, getMission3State, getMissionState, getServerLearnerProgress, getServerMission2Progress, getServerMission2State, getServerMission3Progress, getServerMission3State, getServerMissionState, startMission2, startMission3, subscribeMission } from "@/lib/store";
+import { dispatchMission, getActiveMission, getLearnerProgress, getMission2Progress, getMission2State, getMission3Progress, getMission3State, getMission4Progress, getMission4State, getMissionState, getServerLearnerProgress, getServerMission2Progress, getServerMission2State, getServerMission3Progress, getServerMission3State, getServerMission4Progress, getServerMission4State, getServerMissionState, startMission2, startMission3, startMission4, subscribeMission } from "@/lib/store";
 import { learnerSkills, skillLabel, type LearnerProgress } from "@/lib/learner";
 import type { MissionAction } from "@/lib/reducer";
 import { ChoiceList } from "@/app/components/choice-list";
@@ -24,6 +24,8 @@ import { MissionTwoPlayer } from "@/app/components/mission-two-player";
 import { mission2Definition, type Mission2Progress, type Mission2State } from "@/lib/missions/the-vague-request";
 import { mission3Definition, type Mission3Progress, type Mission3State } from "@/lib/missions/one-prompt-wont-do-it";
 import { MissionThreePlayer } from "@/app/components/mission-three-player";
+import { mission4Definition, type Mission4Progress, type Mission4State } from "@/lib/missions/what-next";
+import { MissionFourPlayer } from "@/app/components/mission-four-player";
 
 const subscribeToHydration = () => () => {};
 const clientReadySnapshot = () => true;
@@ -39,25 +41,28 @@ function RestoreMission({ state, onReset }: { state: MissionState; onReset: () =
   );
 }
 
-function MissionHub({ state, progress, mission2State, mission2Progress, mission3State, mission3Progress, onStart, onStart2, onStart3 }: { state: MissionState; progress: LearnerProgress; mission2State: Mission2State; mission2Progress: Mission2Progress; mission3State: Mission3State; mission3Progress: Mission3Progress; onStart: () => void; onStart2: () => void; onStart3: () => void }) {
+function MissionHub({ state, progress, mission2State, mission2Progress, mission3State, mission3Progress, mission4State, mission4Progress, onStart, onStart2, onStart3, onStart4 }: { state: MissionState; progress: LearnerProgress; mission2State: Mission2State; mission2Progress: Mission2Progress; mission3State: Mission3State; mission3Progress: Mission3Progress; mission4State: Mission4State; mission4Progress: Mission4Progress; onStart: () => void; onStart2: () => void; onStart3: () => void; onStart4: () => void }) {
   const isInProgress = state.stage > 0 && !state.shipped;
   const mission2InProgress = mission2State.stage > 0 && mission2State.stage < 10;
   const mission2Unlocked = progress.completed;
   const mission3InProgress = mission3State.stage > 0 && mission3State.stage < 8;
   const mission3Unlocked = mission2Progress.completed;
-  const completedCount = Number(progress.completed) + Number(mission2Progress.completed) + Number(mission3Progress.completed);
+  const mission4InProgress = mission4State.stage > 0 && mission4State.stage < 8;
+  const mission4Unlocked = mission3Progress.completed;
+  const completedCount = Number(progress.completed) + Number(mission2Progress.completed) + Number(mission3Progress.completed) + Number(mission4Progress.completed);
   const status = isInProgress ? "In progress" : progress.completed ? "Completed" : "Not started";
-  const latest = new Map((mission3Progress.completed ? mission3Progress.latestSkillResults : mission2Progress.completed ? mission2Progress.latestSkillResults : progress.latestSkillResults).map((skill) => [skill.name, skill]));
+  const latestResults = mission4Progress.completed ? mission4Progress.latestSkillResults : mission3Progress.completed ? mission3Progress.latestSkillResults : mission2Progress.completed ? mission2Progress.latestSkillResults : progress.latestSkillResults;
+  const latest = new Map(latestResults.map((skill) => [skill.name, skill]));
   return <div className="hub-shell">
     <header className="hub-topbar"><div className="brand">build<span>loop</span><i /></div><span className="hub-local">Your progress is saved on this device</span></header>
     <main className="hub-main">
       <section className="hub-intro"><p className="eyebrow">YOUR MISSION HUB</p><h1>Learn to build real things with AI.</h1><p>Make decisions, see what happens, and practice taking an idea all the way to a working product.</p></section>
-      <section className="learner-progress" aria-label="Learner progress"><div><span className="eyebrow">YOUR PROGRESS</span><strong>{completedCount ? `${completedCount} of 3 missions complete` : isInProgress ? "Mission 1 in progress" : "Your learning journey starts here"}</strong></div><span>{progress.attempts + mission2Progress.attempts.length + mission3Progress.attempts.length} {progress.attempts + mission2Progress.attempts.length + mission3Progress.attempts.length === 1 ? "attempt" : "attempts"}</span><div className="hub-progress-track" aria-label={`${Math.round(completedCount / 3 * 100)}% mission progress`}><span style={{ width: `${completedCount / 3 * 100}%` }} /></div></section>
+      <section className="learner-progress" aria-label="Learner progress"><div><span className="eyebrow">YOUR PROGRESS</span><strong>{completedCount ? `${completedCount} of 4 missions complete` : isInProgress ? "Mission 1 in progress" : "Your learning journey starts here"}</strong></div><span>{progress.attempts + mission2Progress.attempts.length + mission3Progress.attempts.length + mission4Progress.attempts.length} {progress.attempts + mission2Progress.attempts.length + mission3Progress.attempts.length + mission4Progress.attempts.length === 1 ? "attempt" : "attempts"}</span><div className="hub-progress-track" aria-label={`${Math.round(completedCount / 4 * 100)}% mission progress`}><span style={{ width: `${completedCount / 4 * 100}%` }} /></div></section>
       <section className="mission-cards" aria-label="Missions">
         <article className="hub-mission-card">
           <div className="hub-card-top"><span className="mission-number">MISSION {mission1Definition.metadata.number}</span><span className={`mission-status ${isInProgress ? "is-progress" : progress.completed ? "is-completed" : ""}`}>{status}</span></div>
           <h2>{mission1Definition.metadata.title}</h2><p className="mission-description">{mission1Definition.metadata.description}</p>
-          <div className="hub-skills"><span className="eyebrow">YOU’LL PRACTICE</span><div><span>Understand the user</span><span>Find the real problem</span><span>Choose an MVP</span><span>Test and improve</span></div></div>
+          <div className="hub-skills"><span className="eyebrow">YOU’LL PRACTICE</span><div><span>Understand the user</span><span>Find the real problem</span><span>Choose what to build first</span><span>Test and improve</span></div></div>
           <div className="hub-card-footer"><span>{progress.completed ? `Completed · ${progress.attempts} ${progress.attempts === 1 ? "attempt" : "attempts"}` : `About ${mission1Definition.metadata.estimatedMinutes} minutes · No coding needed`}</span><button className="button button-primary" onClick={onStart} type="button">{isInProgress ? "Continue Mission" : progress.completed ? "Replay Mission" : "Start Mission"}<span aria-hidden="true">→</span></button></div>
         </article>
         <article className={`hub-mission-card hub-mission-two${mission2Unlocked ? "" : " is-locked"}`} aria-label={mission2Unlocked ? "Mission 2" : "Mission 2 locked"}>
@@ -71,6 +76,12 @@ function MissionHub({ state, progress, mission2State, mission2Progress, mission3
           <h2>{mission3Unlocked ? mission3Definition.metadata.title : "Locked for now"}</h2><p className="mission-description">{mission3Unlocked ? mission3Definition.metadata.description : "Complete Mission 2 to continue your journey."}</p>
           {mission3Unlocked && <div className="hub-skills"><span className="eyebrow">YOU’LL PRACTICE</span><div>{mission3Definition.skills.map((skill) => <span key={skill}>{skill}</span>)}</div></div>}
           <div className="hub-card-footer"><span>{mission3Unlocked ? `About ${mission3Definition.metadata.estimatedMinutes} minutes · No coding needed` : "Available after Mission 2"}</span>{mission3Unlocked && <button className="button button-primary" onClick={onStart3} type="button">{mission3InProgress ? "Continue Mission" : mission3Progress.completed ? "Replay Mission" : "Start Mission"}<span aria-hidden="true">→</span></button>}</div>
+        </article>
+        <article className={`hub-mission-card hub-mission-two${mission4Unlocked ? "" : " is-locked"}`} aria-label={mission4Unlocked ? "Mission 4" : "Mission 4 locked"}>
+          <div className="hub-card-top"><span className="mission-number">MISSION {mission4Definition.metadata.number}</span><span className={`mission-status ${mission4InProgress ? "is-progress" : mission4Progress.completed ? "is-completed" : ""}`}>{mission4Unlocked ? mission4InProgress ? "In progress" : mission4Progress.completed ? "Completed" : "Not started" : "Locked"}</span></div>
+          <h2>{mission4Unlocked ? mission4Definition.metadata.title : "Locked for now"}</h2><p className="mission-description">{mission4Unlocked ? mission4Definition.metadata.description : "Complete Mission 3 to continue your journey."}</p>
+          {mission4Unlocked && <div className="hub-skills"><span className="eyebrow">YOU’LL PRACTICE</span><div>{["Choose what matters", "Give a clear goal", "Try the real result", "Share when it works"].map((skill) => <span key={skill}>{skill}</span>)}</div></div>}
+          <div className="hub-card-footer"><span>{mission4Unlocked ? `About ${mission4Definition.metadata.estimatedMinutes} minutes · No coding needed` : "Available after Mission 3"}</span>{mission4Unlocked && <button className="button button-primary" onClick={onStart4} type="button">{mission4InProgress ? "Continue Mission" : mission4Progress.completed ? "Replay Mission" : "Start Mission"}<span aria-hidden="true">→</span></button>}</div>
         </article>
       </section>
       <section className="skill-progress"><div className="skill-heading"><div><span className="eyebrow">SKILLS YOU’RE BUILDING</span><h2>Small steps add up.</h2></div>{progress.completed && <span className="skill-note">Based on your latest attempt</span>}</div><div className="skill-list">{learnerSkills.map((name) => {
@@ -171,7 +182,7 @@ function ProblemStage({ state, dispatch }: { state: MissionState; dispatch: Disp
     <StageHeading eyebrow="STEP 02 · DEFINE THE PROBLEM" title="What needs fixing?" description="Pick the statement that best describes Ari’s problem. Specific problems lead to more useful solutions." />
     <ChoiceList label="Choose the problem that best describes Ari’s need" options={problemOptions.map((option) => ({ id: option.id, label: option.text }))} value={state.problemChoice} onChange={(problem) => dispatch({ type: "SELECT_PROBLEM", problem })} />
     {selected && <div className="inline-feedback"><span className="feedback-mark">↗</span><p>{selected.reason}</p></div>}
-    <StageContinue disabled={!state.problemChoice} onClick={() => dispatch({ type: "ADVANCE" })}>Choose an MVP</StageContinue>
+    <StageContinue disabled={!state.problemChoice} onClick={() => dispatch({ type: "ADVANCE" })}>Choose what to build first</StageContinue>
   </>;
 }
 
@@ -180,26 +191,26 @@ function ScopeStage({ state, dispatch }: { state: MissionState; dispatch: Dispat
   const overBudget = cost > mission1Definition.scoring.featureBudget;
   const allCore = featureCatalog.filter((item) => item.core).every((item) => state.selectedFeatures.includes(item.id));
   return <>
-    <StageHeading eyebrow="STEP 03 · SCOPE THE MVP" title="Spend your build budget." description="Choose what the first version needs. Your budget is tight on purpose: focus on proving the useful behavior." />
-    <div className="budget-bar"><div><span className="eyebrow">BUILD BUDGET</span><strong>{mission1Definition.scoring.featureBudget - cost} <span>of {mission1Definition.scoring.featureBudget} points left</span></strong></div><div className="budget-blocks" aria-label={`${cost} of ${mission1Definition.scoring.featureBudget} budget points used`}>{Array.from({ length: mission1Definition.scoring.featureBudget }, (_, i) => <span className={i < cost ? "is-used" : ""} key={i} />)}</div></div>
+    <StageHeading eyebrow="STEP 03 · THE FIRST VERSION" title="What does Ari need first?" description="Choose the parts that help the club track who has each item. Extras can wait until the basic handoff works." />
+    <div className="budget-bar"><div><span className="eyebrow">ROOM IN THIS VERSION</span><strong>{mission1Definition.scoring.featureBudget - cost} <span>choices left</span></strong></div><div className="budget-blocks" aria-label={`${cost} of ${mission1Definition.scoring.featureBudget} choices used`}>{Array.from({ length: mission1Definition.scoring.featureBudget }, (_, i) => <span className={i < cost ? "is-used" : ""} key={i} />)}</div></div>
     <div className="feature-list">{featureCatalog.map((feature) => {
       const checked = state.selectedFeatures.includes(feature.id);
       return <button key={feature.id} className={`feature-row${checked ? " is-selected" : ""}`} onClick={() => dispatch({ type: "TOGGLE_FEATURE", feature: feature.id })} type="button" aria-pressed={checked}>
         <span className="feature-check">{checked ? "✓" : ""}</span><span className="feature-name">{feature.label}{feature.core && <small>CORE</small>}</span><span className="feature-cost">{feature.cost} pt{feature.cost > 1 ? "s" : ""}</span>
       </button>;
     })}</div>
-    <div className="scope-note"><span>{allCore ? "✓" : "↗"}</span><p>{allCore ? "Your core flow is covered: list, checkout, name, return, and saved state." : "Can a club member borrow a camera and can Ari see who has it? Make sure your MVP can answer both."}</p></div>
-    <StageContinue disabled={!state.selectedFeatures.length || overBudget} onClick={() => dispatch({ type: "ADVANCE" })}>{overBudget ? "Over budget" : "Write a build brief"}</StageContinue>
+    <div className="scope-note"><span>{allCore ? "✓" : "↗"}</span><p>{allCore ? "Your first version covers the handoff: list, borrow, name, return, and saved state." : "Can a member borrow a camera and can Ari see who has it? Make sure the first version can do both."}</p></div>
+    <StageContinue disabled={!state.selectedFeatures.length || overBudget} onClick={() => dispatch({ type: "ADVANCE" })}>{overBudget ? "Too many choices" : "Give the AI a goal"}</StageContinue>
   </>;
 }
 
 function BriefStage({ state, dispatch }: { state: MissionState; dispatch: Dispatch<MissionAction> }) {
   const quality = evaluateBrief(state.brief);
-  const qualities = [{ key: "context", label: "Context", hint: "Who is it for and why?" }, { key: "behavior", label: "Behavior", hint: "What should it do?" }, { key: "boundaries", label: "Boundaries", hint: "What should stay out?" }, { key: "verification", label: "Checks", hint: "How will we know it works?" }] as const;
+  const qualities = [{ key: "context", label: "Who it helps", hint: "Who is it for and why?" }, { key: "behavior", label: "What they can do", hint: "What should it do?" }, { key: "boundaries", label: "What can wait", hint: "What should stay out?" }, { key: "verification", label: "How you’ll know", hint: "How will we know it works?" }] as const;
   return <>
-    <StageHeading eyebrow="STEP 04 · DIRECT THE AI" title="Brief your AI developer." description="Describe what to build in your own words. A useful brief says who it’s for, what it should do, and how to check the result." />
-    <div className="brief-layout"><div className="brief-editor"><label htmlFor="build-brief" className="eyebrow">YOUR BUILD BRIEF</label><textarea id="build-brief" value={state.brief} onChange={(event) => dispatch({ type: "SET_BRIEF", brief: event.target.value })} placeholder="Build a simple equipment tracker for Ari’s photography club…" maxLength={800} /><div className="editor-foot"><span>Write it like you’re talking to a developer.</span><span>{state.brief.length} / 800</span></div><div className="brief-prompts"><span className="eyebrow">THINGS TO CONSIDER</span><div><span>Who is it for?</span><span>What should it do?</span><span>What should it skip?</span><span>How will you test it?</span></div></div></div>
-      <div className="quality-panel"><div className="quality-head"><span className="eyebrow">BRIEF QUALITY</span><strong>{quality.total}<span> / 100</span></strong></div><div className="quality-rows">{qualities.map((part) => <div className="quality-row" key={part.key}><span className={`quality-dot ${quality[part.key] ? "is-met" : ""}`} /><span className="quality-label">{part.label}</span><span className="quality-hint">{quality[part.key] ? "Covered" : part.hint}</span></div>)}</div><p className="quality-foot">This checks for useful details, not perfect wording.</p></div></div>
+    <StageHeading eyebrow="STEP 04 · GIVE THE AI A GOAL" title="What should the AI build?" description="Say who it helps, what they should be able to do, and how you’ll know it worked." />
+    <div className="brief-layout"><div className="brief-editor"><label htmlFor="build-brief" className="eyebrow">YOUR REQUEST TO THE AI</label><textarea id="build-brief" value={state.brief} onChange={(event) => dispatch({ type: "SET_BRIEF", brief: event.target.value })} placeholder="Build a simple equipment tracker for Ari’s photography club…" maxLength={800} /><div className="editor-foot"><span>Write it like you’re telling a helpful builder what to make.</span><span>{state.brief.length} / 800</span></div><div className="brief-prompts"><span className="eyebrow">A FEW USEFUL DETAILS</span><div><span>Who does it help?</span><span>What should they do?</span><span>What can wait?</span><span>How will you know?</span></div></div></div>
+      <div className="quality-panel"><div className="quality-head"><span className="eyebrow">HELPFUL DETAILS</span><strong>{quality.total / 25}<span> / 4</span></strong></div><div className="quality-rows">{qualities.map((part) => <div className="quality-row" key={part.key}><span className={`quality-dot ${quality[part.key] ? "is-met" : ""}`} /><span className="quality-label">{part.label}</span><span className="quality-hint">{quality[part.key] ? "Included" : part.hint}</span></div>)}</div><p className="quality-foot">This checks for useful details, not perfect wording.</p></div></div>
     <StageContinue disabled={!state.brief.trim()} onClick={() => dispatch({ type: "BUILD", issues: getBuildIssues({ ...state, promptQuality: quality }), quality })}>Send to the AI</StageContinue>
   </>;
 }
@@ -207,9 +218,9 @@ function BriefStage({ state, dispatch }: { state: MissionState; dispatch: Dispat
 function BuildStage({ state, dispatch }: { state: MissionState; dispatch: Dispatch<MissionAction> }) {
   const quality = state.promptQuality;
   return <>
-    <StageHeading eyebrow="STEP 05 · AI BUILD" title="The AI says it’s done." description="Your developer built a first version from your brief. Before you trust the handoff, take a look at what’s actually there." />
-    <div className="build-status"><span className="status-icon">✓</span><div><strong>The developer followed your brief.</strong><span>Your instructions shaped what was built.</span></div><span className="status-tag">BUILD COMPLETE</span></div>
-    <div className="build-review"><div className="review-heading"><span className="eyebrow">IMPLEMENTATION NOTES</span><span className="review-score">BRIEF {quality.total} / 100</span></div><p className="review-summary">The AI made an equipment tracker based on your instructions.</p><div className="review-split"><div className="review-column"><span className="review-label">INCLUDED</span>{state.selectedFeatures.map((id) => <span className="review-line" key={id}><i />{featureCatalog.find((feature) => feature.id === id)?.label}</span>)}</div><div className="review-column warning-column"><span className="review-label">NEEDS A LOOK</span>{state.buildIssues.map((issue) => <span className="review-line" key={issue}><i />{buildIssueLabels[issue] ?? issue}</span>)}{!state.buildIssues.length && <span className="review-line"><i />No obvious gaps in the brief.</span>}</div></div></div>
+    <StageHeading eyebrow="STEP 05 · AI BUILD" title="The AI says it’s done." description="Your developer built a first version from your request. Before you trust the report, take a look at what’s actually there." />
+    <div className="build-status"><span className="status-icon">✓</span><div><strong>The developer followed your goal.</strong><span>Your request shaped what was built.</span></div><span className="status-tag">BUILD COMPLETE</span></div>
+    <div className="build-review"><div className="review-heading"><span className="eyebrow">WHAT THE BUILDER MADE</span><span className="review-score">{quality.total / 25} helpful details</span></div><p className="review-summary">The AI made an equipment tracker based on your request.</p><div className="review-split"><div className="review-column"><span className="review-label">INCLUDED</span>{state.selectedFeatures.map((id) => <span className="review-line" key={id}><i />{featureCatalog.find((feature) => feature.id === id)?.label}</span>)}</div><div className="review-column warning-column"><span className="review-label">NEEDS A LOOK</span>{state.buildIssues.map((issue) => <span className="review-line" key={issue}><i />{buildIssueLabels[issue] ?? issue}</span>)}{!state.buildIssues.length && <span className="review-line"><i />No obvious gaps in the request.</span>}</div></div></div>
     <div className="callout-strip"><span>!</span><p>AI can build quickly. <strong>You’re still responsible for checking the result.</strong></p></div>
     <StageContinue onClick={() => dispatch({ type: "ADVANCE" })}>Open the product</StageContinue>
   </>;
@@ -238,7 +249,7 @@ function TestStage({ state, dispatch }: { state: MissionState; dispatch: Dispatc
     { id: "persistence", label: "Refresh after changing an item", description: "The updated borrower and availability remain.", category: "SAVED STATE" },
   ];
   return <>
-    <StageHeading eyebrow="STEP 06 · TEST THE PRODUCT" title="Put it through its paces." description="Try the app, then pick the checks you want to run. Testing is how you find out whether the build matches the brief." />
+    <StageHeading eyebrow="STEP 06 · TRY THE APP" title="Try Ari’s equipment tracker." description="Use the app yourself, then check the important things you want to work." />
     <ProductPreview state={state} dispatch={dispatch} />
     <div className="test-section"><div className="test-section-head"><div><span className="eyebrow">TEST PLAN</span><h2>What should we check?</h2></div><span className="test-run-count">{state.testsRun.length} run</span></div>
       <div className="test-list">{testCases.map((test) => {
@@ -289,7 +300,7 @@ function ResultsStage({ state, dispatch }: { state: MissionState; dispatch: Disp
     <StageHeading eyebrow="STEP 09 · SHIP IT" title="You shipped something useful." description="You took Ari’s problem from first conversation to a tested product. Here’s what you learned by doing it." />
     <div className="ship-banner"><span className="ship-check">✓</span><div><strong>Mission complete</strong><span>The Missing Cameras · First version shipped</span></div><span className="ship-date">BUILDLOOP / 01</span></div>
     <div className="score-section"><div className="section-label"><span className="eyebrow">YOUR BUILDER SKILLS</span><span>Based on the choices you made</span></div><div className="score-grid">{scores.map((item) => <article className="score-card" key={item.name}><div className="score-top"><h2>{item.name}</h2><strong>{skillLabel(item.score)}</strong></div><div className="score-track"><span style={{ width: `${item.score}%` }} /></div><p>{item.explanation}</p></article>)}</div></div>
-    <details className="summary-details" open><summary><span>Builder summary</span><span className="summary-expand">YOUR MISSION RECORD · ATTEMPT {getLearnerProgress().currentAttempt}</span></summary><div className="summary-grid"><SummaryItem label="USER" value={summary.user} /><SummaryItem label="PROBLEM YOU IDENTIFIED" value={summary.problem} /><SummaryItem label="MVP YOU CHOSE" value={summary.mvp.length ? summary.mvp.join(" · ") : "No features selected"} /><SummaryItem label="WHAT YOU TOLD THE AI" value={summary.brief} /><SummaryItem label="WHAT THE AI BUILT" value={summary.buildOutcome} /><SummaryItem label="WHAT HAPPENED IN TESTS" value={summary.tests.length ? summary.tests.map((test) => `${test.name}: ${test.result?.detail ?? "not recorded"}`).join(" · ") : "No tests run"} /><SummaryItem label="FEEDBACK YOU NOTICED" value={summary.feedback.length ? summary.feedback.join(" · ") : "No feedback selected"} /><SummaryItem label="FEEDBACK YOU ACTED ON" value={summary.feedbackActedOn} /><SummaryItem label="CHANGE YOU MADE" value={summary.changeMade} /><SummaryItem label="WHAT YOU SHIPPED" value={summary.shipped} /></div><div className="summary-equipment"><span className="eyebrow">FINAL PRODUCT STATE</span>{summary.finalEquipment.map((item) => <span key={item.name}>{item.name}<strong>{item.borrower}</strong></span>)}</div></details>
+    <details className="summary-details" open><summary><span>Builder summary</span><span className="summary-expand">YOUR MISSION RECORD · ATTEMPT {getLearnerProgress().currentAttempt}</span></summary><div className="summary-grid"><SummaryItem label="USER" value={summary.user} /><SummaryItem label="PROBLEM YOU IDENTIFIED" value={summary.problem} /><SummaryItem label="FIRST VERSION" value={summary.mvp.length ? summary.mvp.join(" · ") : "No features selected"} /><SummaryItem label="WHAT YOU TOLD THE AI" value={summary.brief} /><SummaryItem label="WHAT THE AI BUILT" value={summary.buildOutcome} /><SummaryItem label="WHAT HAPPENED WHEN YOU TRIED IT" value={summary.tests.length ? summary.tests.map((test) => `${test.name}: ${test.result?.detail ?? "not recorded"}`).join(" · ") : "No tests run"} /><SummaryItem label="FEEDBACK YOU NOTICED" value={summary.feedback.length ? summary.feedback.join(" · ") : "No feedback selected"} /><SummaryItem label="FEEDBACK YOU ACTED ON" value={summary.feedbackActedOn} /><SummaryItem label="CHANGE YOU MADE" value={summary.changeMade} /><SummaryItem label="WHAT YOU SHIPPED" value={summary.shipped} /></div><div className="summary-equipment"><span className="eyebrow">FINAL PRODUCT STATE</span>{summary.finalEquipment.map((item) => <span key={item.name}>{item.name}<strong>{item.borrower}</strong></span>)}</div></details>
     <section className="lesson-section"><span className="eyebrow">WHAT YOUR CHOICES TAUGHT YOU</span><div>{summary.lessons.map((lesson) => <p key={lesson}><span aria-hidden="true">↗</span>{lesson}</p>)}</div></section>
     <div className="result-actions"><span>Your mission and skill progress are saved on this device.</span><button className="button button-quiet" onClick={() => dispatch({ type: "START" })} type="button">Replay Mission <span aria-hidden="true">↺</span></button><button className="button button-primary" onClick={() => dispatch({ type: "RESET" })} type="button">Return to Missions <span aria-hidden="true">→</span></button></div>
   </>;
@@ -307,11 +318,14 @@ export default function MissionPage() {
   const mission2Progress = useSyncExternalStore(subscribeMission, getMission2Progress, getServerMission2Progress);
   const mission3State = useSyncExternalStore(subscribeMission, getMission3State, getServerMission3State);
   const mission3Progress = useSyncExternalStore(subscribeMission, getMission3Progress, getServerMission3Progress);
+  const mission4State = useSyncExternalStore(subscribeMission, getMission4State, getServerMission4State);
+  const mission4Progress = useSyncExternalStore(subscribeMission, getMission4Progress, getServerMission4Progress);
   const activeMission = useSyncExternalStore(subscribeMission, getActiveMission, () => 1);
   const dispatch = dispatchMission;
+  if (activeMission === 4 && mission4State.stage > 0) return <div data-hydrated={hydrated}><MissionFourPlayer state={mission4State} progress={mission4Progress} /></div>;
   if (activeMission === 3 && mission3State.stage > 0) return <div data-hydrated={hydrated}><MissionThreePlayer state={mission3State} progress={mission3Progress} /></div>;
   if (activeMission === 2 && mission2State.stage > 0) return <div data-hydrated={hydrated}><MissionTwoPlayer state={mission2State} progress={mission2Progress} attemptCount={mission2Progress.attempts.length + 1} /></div>;
-  if (state.stage === 0) return <div data-hydrated={hydrated}><MissionHub state={state} progress={learnerProgress} mission2State={mission2State} mission2Progress={mission2Progress} mission3State={mission3State} mission3Progress={mission3Progress} onStart={() => dispatch({ type: "START" })} onStart2={startMission2} onStart3={startMission3} /></div>;
+  if (activeMission === 0 || state.stage === 0) return <div data-hydrated={hydrated}><MissionHub state={state} progress={learnerProgress} mission2State={mission2State} mission2Progress={mission2Progress} mission3State={mission3State} mission3Progress={mission3Progress} mission4State={mission4State} mission4Progress={mission4Progress} onStart={() => dispatch({ type: "START" })} onStart2={startMission2} onStart3={startMission3} onStart4={startMission4} /></div>;
   let stageView: ReactNode;
   switch (state.stage) {
     case 1: stageView = <Discovery state={state} dispatch={dispatch} />; break;

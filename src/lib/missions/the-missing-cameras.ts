@@ -2,7 +2,7 @@ import type { MissionDefinition } from "../mission-types";
 import type { EquipmentItem, MissionState } from "../mission";
 
 export const stages = [
-  "Meet Ari", "Find the problem", "Choose the MVP", "Brief the AI", "Review the build",
+  "Meet Ari", "Find the problem", "First version", "Give the AI a goal", "Review the build",
   "Test it", "Hear feedback", "Choose a change", "Retest", "Ship",
 ] as const;
 
@@ -102,7 +102,7 @@ export const mission1Definition = {
   steps: [
     { id: "discover", label: "Meet Ari", learningConcept: "Understand the user" },
     { id: "define", label: "Define", learningConcept: "Describe the real problem" },
-    { id: "scope", label: "MVP", learningConcept: "Choose what to build first" },
+    { id: "scope", label: "First version", learningConcept: "Choose what to build first" },
     { id: "brief", label: "Brief", learningConcept: "Give clear instructions" },
     { id: "build", label: "Build", learningConcept: "Check what was built" },
     { id: "test", label: "Test", learningConcept: "Test the product" },
@@ -137,7 +137,7 @@ export const mission1Definition = {
     vagueProblem: "A more specific problem would make it easier to choose the first useful thing to build.",
     focusedScope: "You kept the first version focused on the basic equipment handoff.",
     broadScope: "You added extra features before testing the basic handoff. Next time, prove the smallest version first.",
-    incompleteScope: "Your MVP choices shaped what the AI could build. Check that the essentials fit before you send the brief.",
+    incompleteScope: "Your choices shaped what the AI could build. Check that the basic equipment handoff is covered.",
     focusedIteration: "You used Ari’s feedback to make one focused change, then checked it again.",
     evidenceIteration: "Your tests gave you evidence about the build. Tie your next change to the clearest result, then retest it.",
   },

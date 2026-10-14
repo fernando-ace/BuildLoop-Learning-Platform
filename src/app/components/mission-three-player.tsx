@@ -22,7 +22,7 @@ export function MissionThreePlayer({ state, progress }: { state: Mission3State; 
     <main className="m2-main">
       <div className="m2-stage-meta"><span>MISSION 3</span><span>STEP {String(state.stage).padStart(2, "0")} / 08</span></div>
       {state.stage === 1 && <>
-        <div className="m2-heading"><p className="eyebrow">MEET SAM</p><h1>One prompt won’t do it.</h1><p>Sam runs a school club and needs a simple site soon. The main requirements are already clear.</p></div>
+        <div className="m2-heading"><p className="eyebrow">MEET SAM</p><h1>Build, try, improve.</h1><p>Sam runs a school club and needs a simple site soon. The main goal is clear.</p></div>
         <div className="m2-maya-card m3-sam-card"><div className="m2-person"><span className="m2-avatar">S</span><div><strong>Sam</strong><span>School club organizer</span></div></div><blockquote>“Students should understand what we do, see when we meet, and know how to join.”</blockquote><p>The first version needs the club name and description, the next meeting, and a clear Join Club button. Keep it mobile-friendly and easy to read.</p><div className="m3-meeting"><span>NEXT MEETING</span><strong>{definition.meeting.date} · {definition.meeting.time}</strong><span>{definition.meeting.place}</span></div></div>
         <Continue onClick={() => dispatch({ type: "ADVANCE" })}>Choose your first instruction</Continue>
       </>}

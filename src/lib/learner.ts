@@ -43,7 +43,7 @@ export function skillLabel(score: number): "Developing" | "Practicing" | "Strong
   return "Developing";
 }
 
-export const learnerSkills = mission1Definition.skillNames;
+export const learnerSkills = [...mission1Definition.skillNames, "Reviewing AI work"];
 
 export function getBuilderLessons(state: MissionState): string[] {
   const lessons: string[] = [];

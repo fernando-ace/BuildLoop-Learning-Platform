@@ -21,19 +21,19 @@ test("plays the full first mission, finds a defect, fixes it, and ships", async 
   await page.getByRole("button", { name: /I have enough to continue/ }).click();
 
   await page.getByRole("button", { name: /Ari cannot quickly tell/ }).click();
-  await page.getByRole("button", { name: /Choose an MVP/ }).click();
+  await page.getByRole("button", { name: /Choose what to build first/ }).click();
   for (const feature of ["View equipment list", "Check out an item", "Enter borrower name", "Return an item", "Save after refresh"]) {
     await page.getByRole("button", { name: new RegExp(feature) }).click();
   }
-  await expect(page.getByText("2 of 7 points left")).toBeVisible();
+  await expect(page.getByText("2 choices left")).toBeVisible();
   const accounts = page.getByRole("button", { name: /Member accounts/ });
   await accounts.click();
-  await expect(page.getByRole("button", { name: /Over budget/ })).toBeDisabled();
+  await expect(page.getByRole("button", { name: /Too many choices/ })).toBeDisabled();
   await accounts.click();
-  await page.getByRole("button", { name: /Write a build brief/ }).click();
+  await page.getByRole("button", { name: /Give the AI a goal/ }).click();
 
-  await page.getByLabel("YOUR BUILD BRIEF").fill("Build an equipment tracker for Ari's photography club. Members can check out an item with a borrower name and return it. Keep it simple; do not add reservations. Test checkout and return, and done when state stays after refresh.");
-  await expect(page.getByText("Covered").first()).toBeVisible();
+  await page.getByLabel("YOUR REQUEST TO THE AI").fill("Build an equipment tracker for Ari's photography club. Members can check out an item with a borrower name and return it. Keep it simple; do not add reservations. Test checkout and return, and done when state stays after refresh.");
+  await expect(page.getByText("Included").first()).toBeVisible();
   await page.getByRole("button", { name: /Send to the AI/ }).click();
   await expect(page.getByText("Blank borrower names are accepted")).toBeVisible();
   await page.getByRole("button", { name: /Open the product/ }).click();
@@ -139,7 +139,7 @@ test("Mission 2 happy path builds, tests, iterates, retests, and persists the su
   expect(saved.mission2Progress.attempts).toHaveLength(1);
   expect(saved.mission2Progress.latestSkillResults).toHaveLength(8);
   await page.getByRole("button", { name: "Return to Missions" }).click();
-  await expect(page.getByRole("article", { name: "Mission 3" })).toContainText("One Prompt Won’t Do It");
+  await expect(page.getByRole("article", { name: "Mission 3" })).toContainText("Build, Try, Improve");
   await expect(page.getByRole("article", { name: "Mission 3" }).getByRole("button", { name: /Start Mission/ })).toBeVisible();
   await page.getByRole("article", { name: "Mission 2" }).getByRole("button", { name: /Replay Mission/ }).click();
   await expect(page.getByRole("heading", { name: "Start with Maya’s request." })).toBeVisible();
@@ -259,13 +259,13 @@ test("full mission flow has no horizontal overflow at a narrow mobile width", as
   await page.getByRole("button", { name: /I have enough to continue/ }).click();
   await expectNoOverflow();
   await page.getByRole("button", { name: /Ari cannot quickly tell/ }).click();
-  await page.getByRole("button", { name: /Choose an MVP/ }).click();
+  await page.getByRole("button", { name: /Choose what to build first/ }).click();
   for (const feature of ["View equipment list", "Check out an item", "Enter borrower name", "Return an item", "Save after refresh"]) {
     await page.getByRole("button", { name: new RegExp(feature) }).click();
   }
-  await page.getByRole("button", { name: /Write a build brief/ }).click();
+  await page.getByRole("button", { name: /Give the AI a goal/ }).click();
   await expectNoOverflow();
-  await page.getByLabel("YOUR BUILD BRIEF").fill("Build for Ari's photography club. Show equipment and checkout with a borrower name or return it with an easy to find button. Keep it small; do not add accounts. Test checkout and return.");
+  await page.getByLabel("YOUR REQUEST TO THE AI").fill("Build for Ari's photography club. Show equipment and checkout with a borrower name or return it with an easy to find button. Keep it small; do not add accounts. Test checkout and return.");
   await page.getByRole("button", { name: /Send to the AI/ }).click();
   await page.getByRole("button", { name: /Open the product/ }).click();
   await expectNoOverflow();

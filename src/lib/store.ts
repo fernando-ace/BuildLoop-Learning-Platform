@@ -4,6 +4,7 @@ import { completeAttempt, initialLearnerProgress, startAttempt, type LearnerProg
 import { skillScores } from "./mission";
 import { initialMission2Progress, initialMission2State, mission2Reducer, recordMission2Attempt, type Mission2Action, type Mission2Progress, type Mission2State } from "./missions/the-vague-request";
 import { initialMission3Progress, initialMission3State, mission3Reducer, recordMission3Attempt, type Mission3Action, type Mission3Progress, type Mission3State } from "./missions/one-prompt-wont-do-it";
+import { initialMission4Progress, initialMission4State, mission4Reducer, recordMission4Attempt, type Mission4Action, type Mission4Progress, type Mission4State } from "./missions/what-next";
 
 const storageKey = "buildloop-learner-v2";
 const listeners = new Set<() => void>();
@@ -14,7 +15,9 @@ let mission2Progress = initialMission2Progress;
 let mission2AttemptCount = 0;
 let mission3State = initialMission3State;
 let mission3Progress = initialMission3Progress;
-let activeMission: 1 | 2 | 3 = 1;
+let mission4State = initialMission4State;
+let mission4Progress = initialMission4Progress;
+let activeMission: 0 | 1 | 2 | 3 | 4 = 1;
 let loaded = false;
 
 function ensureLoaded() {
@@ -23,7 +26,7 @@ function ensureLoaded() {
   try {
     const saved = window.localStorage.getItem(storageKey);
     if (saved) {
-      const parsed = JSON.parse(saved) as { state?: MissionState; progress?: LearnerProgress; mission2State?: Mission2State; mission2Progress?: Mission2Progress; mission2AttemptCount?: number; mission3State?: Mission3State; mission3Progress?: Mission3Progress; activeMission?: 1 | 2 | 3 };
+      const parsed = JSON.parse(saved) as { state?: MissionState; progress?: LearnerProgress; mission2State?: Mission2State; mission2Progress?: Mission2Progress; mission2AttemptCount?: number; mission3State?: Mission3State; mission3Progress?: Mission3Progress; mission4State?: Mission4State; mission4Progress?: Mission4Progress; activeMission?: 0 | 1 | 2 | 3 | 4 };
       if (parsed.state && typeof parsed.state.stage === "number" && Array.isArray(parsed.state.equipment)) {
         currentState = parsed.state.buildIssues?.includes("persistence")
           ? { ...parsed.state, equipment: initialState.equipment }
@@ -35,8 +38,12 @@ function ensureLoaded() {
       if (typeof parsed.mission2AttemptCount === "number") mission2AttemptCount = parsed.mission2AttemptCount;
       if (parsed.mission3State && typeof parsed.mission3State.stage === "number") mission3State = parsed.mission3State;
       if (parsed.mission3Progress && Array.isArray(parsed.mission3Progress.attempts)) mission3Progress = parsed.mission3Progress;
+      if (parsed.mission4State && typeof parsed.mission4State.stage === "number") mission4State = parsed.mission4State;
+      if (parsed.mission4Progress && Array.isArray(parsed.mission4Progress.attempts)) mission4Progress = parsed.mission4Progress;
+      if (parsed.activeMission === 0) activeMission = 0;
       if (parsed.activeMission === 2 && learnerProgress.completed) activeMission = 2;
       if (parsed.activeMission === 3 && mission2Progress.completed) activeMission = 3;
+      if (parsed.activeMission === 4 && mission3Progress.completed) activeMission = 4;
       return;
     }
     // Keep progress from existing Mission 1 installations when upgrading the save format.
@@ -82,6 +89,10 @@ export function getMission3State() { ensureLoaded(); return mission3State; }
 export function getMission3Progress() { ensureLoaded(); return mission3Progress; }
 export function getServerMission3State() { return initialMission3State; }
 export function getServerMission3Progress() { return initialMission3Progress; }
+export function getMission4State() { ensureLoaded(); return mission4State; }
+export function getMission4Progress() { ensureLoaded(); return mission4Progress; }
+export function getServerMission4State() { return initialMission4State; }
+export function getServerMission4Progress() { return initialMission4Progress; }
 
 export function startMission2() {
   if (!getLearnerProgress().completed) return;
@@ -98,6 +109,24 @@ export function startMission3() {
   if (!getMission2Progress().completed) return;
   activeMission = 3;
   if (mission3State.stage === 0 || mission3State.stage === 8) mission3State = mission3Reducer(mission3State, { type: "START" });
+  persist();
+  listeners.forEach((listener) => listener());
+}
+
+export function startMission4() {
+  if (!getMission3Progress().completed) return;
+  activeMission = 4;
+  if (mission4State.stage === 0 || mission4State.stage === 8) mission4State = mission4Reducer(mission4State, { type: "START" });
+  persist();
+  listeners.forEach((listener) => listener());
+}
+
+export function dispatchMission4(action: Mission4Action) {
+  const previous = getMission4State();
+  if (action.type === "RETURN") activeMission = 0;
+  else mission4State = mission4Reducer(previous, action);
+  if (action.type === "FINAL" && previous.stage === 7) mission4Progress = recordMission4Attempt(mission4Progress, mission4State, mission4Progress.attempts.length + 1);
+  if (action.type === "START") activeMission = 4;
   persist();
   listeners.forEach((listener) => listener());
 }
@@ -148,7 +177,7 @@ function persist() {
     const savedState = currentState.buildIssues.includes("persistence")
       ? { ...currentState, equipment: initialState.equipment }
       : currentState;
-    window.localStorage.setItem(storageKey, JSON.stringify({ state: savedState, progress: learnerProgress, mission2State, mission2Progress, mission2AttemptCount, mission3State, mission3Progress, activeMission }));
+  window.localStorage.setItem(storageKey, JSON.stringify({ state: savedState, progress: learnerProgress, mission2State, mission2Progress, mission2AttemptCount, mission3State, mission3Progress, mission4State, mission4Progress, activeMission }));
   } catch {
     // The mission remains playable if local storage is unavailable.
   }
