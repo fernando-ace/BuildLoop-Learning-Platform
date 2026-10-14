@@ -1,9 +1,12 @@
 import { initialState, type MissionState } from "./mission";
 import { missionReducer, type MissionAction } from "./reducer";
+import { completeAttempt, initialLearnerProgress, startAttempt, type LearnerProgress } from "./learner";
+import { skillScores } from "./mission";
 
-const storageKey = "buildloop-mission-v1";
+const storageKey = "buildloop-learner-v2";
 const listeners = new Set<() => void>();
 let currentState = initialState;
+let learnerProgress = initialLearnerProgress;
 let loaded = false;
 
 function ensureLoaded() {
@@ -11,12 +14,26 @@ function ensureLoaded() {
   loaded = true;
   try {
     const saved = window.localStorage.getItem(storageKey);
-    if (!saved) return;
-    const parsed = JSON.parse(saved) as MissionState;
-    if (parsed && typeof parsed.stage === "number" && Array.isArray(parsed.equipment)) {
-      currentState = parsed.buildIssues?.includes("persistence")
-        ? { ...parsed, equipment: initialState.equipment }
-        : parsed;
+    if (saved) {
+      const parsed = JSON.parse(saved) as { state?: MissionState; progress?: LearnerProgress };
+      if (parsed.state && typeof parsed.state.stage === "number" && Array.isArray(parsed.state.equipment)) {
+        currentState = parsed.state.buildIssues?.includes("persistence")
+          ? { ...parsed.state, equipment: initialState.equipment }
+          : parsed.state;
+        if (parsed.progress && typeof parsed.progress.attempts === "number") learnerProgress = parsed.progress;
+      }
+      return;
+    }
+    // Keep progress from existing Mission 1 installations when upgrading the save format.
+    const legacy = window.localStorage.getItem("buildloop-mission-v1");
+    if (legacy) {
+      const parsed = JSON.parse(legacy) as MissionState;
+      if (parsed && typeof parsed.stage === "number" && Array.isArray(parsed.equipment)) {
+        currentState = parsed.buildIssues?.includes("persistence") ? { ...parsed, equipment: initialState.equipment } : parsed;
+        const migratedProgress = { ...initialLearnerProgress, attempts: parsed.stage > 0 ? 1 : 0, currentAttempt: parsed.stage > 0 ? 1 : 0 };
+        learnerProgress = parsed.shipped ? completeAttempt(migratedProgress, skillScores(parsed)) : migratedProgress;
+        persist();
+      }
     }
   } catch {
     window.localStorage.removeItem(storageKey);
@@ -26,6 +43,15 @@ function ensureLoaded() {
 export function getMissionState() {
   ensureLoaded();
   return currentState;
+}
+
+export function getLearnerProgress() {
+  ensureLoaded();
+  return learnerProgress;
+}
+
+export function getServerLearnerProgress() {
+  return initialLearnerProgress;
 }
 
 export function getServerMissionState() {
@@ -38,16 +64,22 @@ export function subscribeMission(listener: () => void) {
 }
 
 export function dispatchMission(action: MissionAction) {
-  currentState = missionReducer(getMissionState(), action);
-  if (typeof window !== "undefined") {
-    try {
-      const savedState = currentState.buildIssues.includes("persistence")
-        ? { ...currentState, equipment: initialState.equipment }
-        : currentState;
-      window.localStorage.setItem(storageKey, JSON.stringify(savedState));
-    } catch {
-      // The mission remains playable if local storage is unavailable.
-    }
-  }
+  const previous = getMissionState();
+  currentState = missionReducer(previous, action);
+  if (action.type === "START") learnerProgress = startAttempt(learnerProgress);
+  if (action.type === "SHIP" && !previous.shipped) learnerProgress = completeAttempt(learnerProgress, skillScores(currentState));
+  persist();
   listeners.forEach((listener) => listener());
+}
+
+function persist() {
+  if (typeof window === "undefined") return;
+  try {
+    const savedState = currentState.buildIssues.includes("persistence")
+      ? { ...currentState, equipment: initialState.equipment }
+      : currentState;
+    window.localStorage.setItem(storageKey, JSON.stringify({ state: savedState, progress: learnerProgress }));
+  } catch {
+    // The mission remains playable if local storage is unavailable.
+  }
 }

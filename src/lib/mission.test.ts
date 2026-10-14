@@ -6,11 +6,14 @@ import {
   getBuildIssues,
   initialState,
   makeBuilderSummary,
+  mission1Definition,
+  questionCatalog,
   runTest,
   skillScores,
   type MissionState,
 } from "./mission";
 import { missionReducer } from "./reducer";
+import { completeAttempt, getBuilderLessons, initialLearnerProgress, skillLabel, startAttempt } from "./learner";
 
 const fullCore = ["list", "checkout", "borrower", "return", "persistence"];
 const clearBrief = "Build an equipment tracker for Ari's photography club officers. Show the list. Members can check out an available item with a borrower name and return it with an easy to find button. Reject blank names and prevent checkout when already unavailable. Do not add accounts or reservations. Test checkout, return, blank names, double checkout, and refresh; done when all pass.";
@@ -110,16 +113,16 @@ describe("Mission 1 learning mechanics", () => {
 
   it("uses selected feedback to evaluate judgment", () => {
     const state: MissionState = { ...initialState, feedbackChoices: ["return"] };
-    expect(skillScores(state).find((score) => score.name === "Feedback judgment")?.score).toBe(100);
+    expect(skillScores(state).find((score) => score.name === "Feedback")?.score).toBe(100);
     const suggestionOnly: MissionState = { ...initialState, feedbackChoices: ["dark"] };
-    expect(skillScores(suggestionOnly).find((score) => score.name === "Feedback judgment")?.score).toBe(48);
+    expect(skillScores(suggestionOnly).find((score) => score.name === "Feedback")?.score).toBe(48);
   });
 
   it("rewards a focused core MVP over spending spare points on extra features", () => {
     const focused: MissionState = { ...initialState, selectedFeatures: fullCore };
     const padded: MissionState = { ...initialState, selectedFeatures: [...fullCore, "dark-mode"] };
-    expect(skillScores(focused).find((score) => score.name === "Scope discipline")?.score).toBe(100);
-    expect(skillScores(padded).find((score) => score.name === "Scope discipline")?.score).toBe(92);
+    expect(skillScores(focused).find((score) => score.name === "Scope")?.score).toBe(100);
+    expect(skillScores(padded).find((score) => score.name === "Scope")?.score).toBe(92);
   });
 
   it("does not claim an unrelated iteration checked Ari's key evidence", () => {
@@ -149,7 +152,7 @@ describe("Mission 1 learning mechanics", () => {
       iterationChoice: "return",
       iterationTested: true,
     };
-    expect(skillScores(state).map((score) => score.score)).toEqual([0, 100, 100, 0, 40, 100, 100]);
+    expect(skillScores(state).map((score) => score.score)).toEqual([0, 100, 100, 0, 40, 100, 100, 100]);
     expect(skillScores(state)).toEqual(skillScores(state));
     const summary = makeBuilderSummary(state);
     expect(summary.problem).toContain("Ari cannot quickly tell");
@@ -159,5 +162,35 @@ describe("Mission 1 learning mechanics", () => {
     expect(summary.iteration).toContain("Return easier to find");
     expect(summary.iterationReason).toContain("Observed Ari pause");
     expect(summary.finalEquipment).toHaveLength(4);
+  });
+
+  it("defines Mission 1 as reusable content with steps, characters, choices, and scoring rules", () => {
+    expect(mission1Definition.metadata.title).toBe("The Missing Cameras");
+    expect(mission1Definition.steps).toHaveLength(9);
+    expect(mission1Definition.characters[0].name).toBe("Ari");
+    expect(mission1Definition.choices.questions).toBe(questionCatalog);
+    expect(mission1Definition.scoring.featureBudget).toBe(7);
+    expect(mission1Definition.skillNames).toHaveLength(8);
+  });
+
+  it("preserves completion history and best skills when starting another attempt", () => {
+    const firstAttempt = startAttempt(initialLearnerProgress);
+    expect(firstAttempt.attempts).toBe(1);
+    const skills = skillScores({ ...initialState, shipped: true });
+    const completed = completeAttempt(firstAttempt, skills);
+    expect(completed.completed).toBe(true);
+    expect(completed.latestSkillResults).toEqual(skills);
+    const secondAttempt = startAttempt(completed);
+    expect(secondAttempt.attempts).toBe(2);
+    expect(secondAttempt.completed).toBe(true);
+    expect(secondAttempt.bestSkillResults).toEqual(skills);
+  });
+
+  it("labels skills with simple feedback and generates lessons from actual decisions", () => {
+    expect([skillLabel(20), skillLabel(65), skillLabel(95)]).toEqual(["Developing", "Practicing", "Strong"]);
+    const state: MissionState = { ...initialState, questionsAsked: ["breaks", "users"], problemChoice: "equipment", selectedFeatures: fullCore, feedbackChoices: ["return"], iterationChoice: "return", iterationTested: true };
+    expect(getBuilderLessons(state)).toHaveLength(3);
+    expect(getBuilderLessons(state)[0]).toContain("real problem");
+    expect(getBuilderLessons(state)[2]).toContain("checked it again");
   });
 });
