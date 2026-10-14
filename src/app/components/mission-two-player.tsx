@@ -38,7 +38,7 @@ export function MissionTwoPlayer({ state, progress, attemptCount }: { state: Mis
         {questionCount < 2 && <p className="m2-hint">Ask at least two questions to hear what Maya needs.</p>}
       </>}
       {state.stage === 2 && <>
-        <div className="m2-heading"><p className="eyebrow">{stageLabel}</p><h1>Give the AI a useful brief.</h1><p>Choose a clear outcome and a focused first version. Select more than one feature where it makes sense.</p></div>
+        <div className="m2-heading"><p className="eyebrow">{stageLabel}</p><h1>Give the AI a clear goal.</h1><p>Choose who it helps, what they need, and what should wait. The AI turns your choices into a build request.</p></div>
         <div className="m2-builder-grid"><div className="m2-fields">{(["audience", "problem", "build", "features", "boundaries", "success"] as BriefField[]).map((field) => <section className="m2-field" key={field}><h2>{fieldLabels[field]}</h2><div className="m2-choice-list">{definition.options[field].map((option) => {
           const selected = field === "features" ? (state.briefChoices.features ?? []).includes(option.id) : state.briefChoices[field] === option.id;
           return <Choice key={option.id} selected={selected} onClick={() => setChoice(field, option.id)}>{option.label}</Choice>;

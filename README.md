@@ -1,6 +1,6 @@
-# BuildLoop — Mission 1
+# BuildLoop — Learn to build with AI
 
-BuildLoop is a browser game about learning to build useful software with AI. In **The Missing Cameras**, the player helps Ari, a photography club officer, replace an unreliable group chat and memory with a small equipment tracker.
+BuildLoop is a browser game about learning to build useful software with AI. Four short missions follow people as they find a real problem, ask an AI to build something useful, try what it made, and decide what should happen next.
 
 ## Run locally
 
@@ -11,27 +11,20 @@ npm run dev
 
 The app is local-first. Mission progress is saved in browser storage; no account, backend, database, or real AI service is used.
 
-## Mission loop
+## The learning loop
 
-1. Ask Ari up to three questions and collect clues.
-2. Choose a specific problem statement.
-3. Scope an MVP with a seven point build budget.
-4. Write a build brief and see its context, behavior, boundaries, and checks coverage.
-5. Review a deterministic simulated AI build.
-6. Use the embedded equipment app and run targeted checks.
-7. Select feedback signals, choose one focused iteration, and review the second build.
-8. Ship and receive a skills breakdown plus a Builder Summary of the choices made.
+Understand what matters, choose the next goal, give the AI enough context, try the result, and respond to what happened. Each mission uses a different fictional product and deterministic AI simulation.
 
-The narrative and catalog data are in [mission.ts](src/lib/mission.ts). Reducer transitions are in [reducer.ts](src/lib/reducer.ts), with local persistence in [store.ts](src/lib/store.ts). Individual mission screens and the shared navigation shell are separate React components in [page.tsx](src/app/page.tsx); the rendering switch is small and the mission rules stay outside the page component.
+Mission 4, **What Should We Build Next?**, starts from a working study-session app and a student’s feedback. Learners explore the problem, choose a goal for the Builder, try the updated app, give focused feedback when it needs work, and decide whether to share it.
+
+Mission scenarios and deterministic build outcomes live in `src/lib/missions/`. Mission state is saved with the shared local progress record in [store.ts](src/lib/store.ts). Each mission has its own screen; existing saves continue to use the same browser storage key.
 
 ## Product decisions
 
-- Useful discovery questions lead to user evidence; weak feature questions get an honest answer without a right/wrong label.
-- The MVP budget permits several different choices, while making core equipment tracking affordable.
-- The simulated developer produces issues from missing brief details or omitted persistence. Repeating the same decisions produces the same result.
-- Product checks focus on the core path, invalid input, double checkout, and saved state. Learners choose which checks to run.
-- Feedback separates observed behavior from requests and preferences. A focused change keeps the working product intact.
-- Scores explain the choices and checks they reflect instead of awarding generic XP.
+- Product evidence guides choices, while weaker but playable paths still show realistic consequences.
+- The simulated Builder is deterministic: the same choices produce the same result.
+- Learners try the product after a build and use observed behavior to guide any follow-up.
+- Scores explain which choices they reflect instead of awarding generic XP.
 
 ## Validation
 
@@ -39,7 +32,7 @@ The narrative and catalog data are in [mission.ts](src/lib/mission.ts). Reducer 
 - `npm run typecheck` — TypeScript
 - `npm test` — Vitest unit coverage
 - `npm run build` — optimized Next.js build
-- `npm run test:e2e` (after `npm run build`) — Chromium desktop mission completion and 390px mobile overflow through the full mission against the production server
+- `npm run test:e2e` (after `npm run build`) — Chromium coverage of mission progression and completion, including desktop and 390px mobile layouts against the production server
 - `npm audit` — dependency audit
 
 ## Known limits
