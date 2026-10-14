@@ -139,6 +139,8 @@ test("Mission 2 happy path builds, tests, iterates, retests, and persists the su
   expect(saved.mission2Progress.attempts).toHaveLength(1);
   expect(saved.mission2Progress.latestSkillResults).toHaveLength(8);
   await page.getByRole("button", { name: "Return to Missions" }).click();
+  await expect(page.getByRole("article", { name: "Mission 3" })).toContainText("One Prompt Won’t Do It");
+  await expect(page.getByRole("article", { name: "Mission 3" }).getByRole("button", { name: /Start Mission/ })).toBeVisible();
   await page.getByRole("article", { name: "Mission 2" }).getByRole("button", { name: /Replay Mission/ }).click();
   await expect(page.getByRole("heading", { name: "Start with Maya’s request." })).toBeVisible();
   await page.reload();
