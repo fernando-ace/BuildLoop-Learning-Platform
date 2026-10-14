@@ -60,6 +60,7 @@ test("plays the full first mission, finds a defect, fixes it, and ships", async 
   await page.getByRole("button", { name: /Return to Missions/ }).click();
   await expect(page.getByRole("heading", { name: "Learn to build real things with AI." })).toBeVisible();
   await expect(page.getByText("Completed", { exact: true })).toBeVisible();
+  await expect(page.getByRole("article", { name: "Mission 2" })).toContainText("The Vague Request");
   await expect(page.getByText("Strong").first()).toBeVisible();
   const progressAfterCompletion = await page.evaluate(() => JSON.parse(localStorage.getItem("buildloop-learner-v2") || "{}").progress);
   expect(progressAfterCompletion.completed).toBe(true);
@@ -72,6 +73,123 @@ test("plays the full first mission, finds a defect, fixes it, and ships", async 
   expect(progressAfterReplay.attempts).toBe(2);
   expect(progressAfterReplay.latestSkillResults).toHaveLength(8);
   expect(pageErrors).toEqual([]);
+});
+
+async function unlockMission2(page: import("@playwright/test").Page) {
+  await page.goto("/");
+  await page.evaluate(() => {
+    localStorage.clear();
+    localStorage.setItem("buildloop-learner-v2", JSON.stringify({
+      state: { stage: 0, questionsAsked: [], problemChoice: "", selectedFeatures: [], brief: "", promptQuality: { context: 0, behavior: 0, boundaries: 0, verification: 0, total: 0 }, buildIssues: [], testsRun: [], testResults: {}, equipment: [], borrowerInput: "", feedbackChoices: [], iterationChoice: "", iterationTested: false, shipped: false },
+      progress: { completed: true, attempts: 1, currentAttempt: 1, latestSkillResults: [], bestSkillResults: [] },
+    }));
+  });
+  await page.reload();
+  await expect(page.getByRole("button", { name: /Start Mission/ })).toBeVisible();
+  await page.getByRole("article", { name: "Mission 2" }).getByRole("button", { name: /Start Mission/ }).click();
+}
+
+test("Mission 2 happy path builds, tests, iterates, retests, and persists the summary on mobile", async ({ page }) => {
+  const pageErrors: string[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+  await page.setViewportSize({ width: 390, height: 844 });
+  await unlockMission2(page);
+  const noOverflow = async () => {
+    const size = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth }));
+    expect(size.scroll).toBeLessThanOrEqual(size.client);
+  };
+  await noOverflow();
+  for (const question of ["What do students need to see?", "What should students be able to do?", "Do students need accounts?"]) {
+    await page.getByRole("button", { name: new RegExp(question) }).click();
+  }
+  await noOverflow();
+  await expect(page.getByText(/Not for the first version/)).toBeVisible();
+  await page.getByRole("button", { name: /Build the first brief/ }).click();
+  await noOverflow();
+  for (const choice of ["Students in Maya's volunteer club", "Event details and signups get lost across messages", "A simple mobile-friendly web app", "Show event date, time, place, and description", "Let a student join an event with their name", "Let organizers see the signup list", "Keep this first version simple", "A student can find an event, sign up, and see confirmation"]) {
+    await page.getByRole("button", { name: new RegExp(choice) }).click();
+  }
+  await page.getByRole("button", { name: /Review my brief/ }).click();
+  await expect(page.getByText(/Students join an event/)).toBeVisible();
+  await page.getByRole("button", { name: /Build version 1/ }).click();
+  await noOverflow();
+  await page.getByRole("button", { name: /View event|Details/ }).first().click();
+  await page.getByLabel("Your name").fill("Jordan");
+  await page.getByRole("button", { name: "Sign Up" }).click();
+  await expect(page.getByText(/did not confirm the event/)).toBeVisible();
+  await noOverflow();
+  await page.getByRole("button", { name: /What went wrong/ }).click();
+  await page.getByRole("button", { name: /Jordan clicked Sign Up but got no confirmation/ }).click();
+  await noOverflow();
+  await page.getByRole("button", { name: /After Sign Up, show the event name/ }).click();
+  await page.getByRole("button", { name: /Ask the AI to update it/ }).click();
+  await expect(page.getByText(/Jordan sees: You’re signed up/)).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "The AI made a focused change." })).toBeVisible();
+  await noOverflow();
+  await page.getByRole("button", { name: /Retest Jordan.s task/ }).click();
+  await page.getByRole("button", { name: "Sign Jordan up" }).click();
+  await page.getByRole("button", { name: "Check the result" }).click();
+  await expect(page.getByRole("heading", { name: "Jordan’s task works now." })).toBeVisible();
+  await page.getByRole("button", { name: /Ship the focused first version/ }).click();
+  await expect(page.getByRole("heading", { name: "You shipped a better brief." })).toBeVisible();
+  await expect(page.getByText(/What version 1 got wrong/)).toBeVisible();
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("buildloop-learner-v2") || "{}"));
+  expect(saved.mission2Progress.completed).toBe(true);
+  expect(saved.mission2Progress.attempts).toHaveLength(1);
+  expect(saved.mission2Progress.latestSkillResults).toHaveLength(8);
+  await page.getByRole("button", { name: "Return to Missions" }).click();
+  await page.getByRole("article", { name: "Mission 2" }).getByRole("button", { name: /Replay Mission/ }).click();
+  await expect(page.getByRole("heading", { name: "Start with Maya’s request." })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Start with Maya’s request." })).toBeVisible();
+  const afterReplay = await page.evaluate(() => JSON.parse(localStorage.getItem("buildloop-learner-v2") || "{}"));
+  expect(afterReplay.mission2Progress.attempts).toHaveLength(1);
+  expect(afterReplay.mission2Progress.attempts[0].number).toBe(1);
+  expect(afterReplay.mission2AttemptCount).toBe(2);
+  expect(pageErrors).toEqual([]);
+});
+
+test("Mission 2 weak choices lead to missing behavior and vague feedback does not fix it", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await unlockMission2(page);
+  await page.getByRole("button", { name: /Do students need accounts/ }).click();
+  await page.getByRole("button", { name: /What can wait until later/ }).click();
+  await page.getByRole("button", { name: /Build the first brief/ }).click();
+  await page.getByRole("button", { name: /Anyone on campus/ }).click();
+  await page.getByRole("button", { name: /The club needs more events/ }).click();
+  await page.getByRole("button", { name: /A full native app/ }).click();
+  await page.getByRole("button", { name: /Add a social feed/ }).click();
+  await page.getByRole("button", { name: /Build every feature now/ }).click();
+  await page.getByRole("button", { name: /The app looks polished/ }).click();
+  await page.getByRole("button", { name: /Review my brief/ }).click();
+  await page.getByRole("button", { name: /Build version 1/ }).click();
+  const size = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth }));
+  expect(size.scroll).toBeLessThanOrEqual(size.client);
+  await page.getByRole("button", { name: /View event|Details/ }).first().click();
+  await page.getByRole("button", { name: /What went wrong/ }).click();
+  await page.getByRole("button", { name: /event card is missing details/i }).click();
+  await page.getByRole("button", { name: /Make it better/ }).click();
+  await page.getByRole("button", { name: /Ask the AI to update it/ }).click();
+  await expect(page.getByText(/No visible change/)).toBeVisible();
+  await page.getByRole("button", { name: /Retest Jordan.s task/ }).click();
+  await page.getByRole("button", { name: "Sign Jordan up" }).click();
+  await page.getByRole("button", { name: "Check the result" }).click();
+  await expect(page.getByRole("heading", { name: "The retest still found a gap." })).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test("Mission 2 remains locked before Mission 1 completion", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto("/");
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await expect(page.getByRole("article", { name: "Mission 2 locked" })).toContainText("Complete Mission 1");
+  await expect(page.getByRole("article", { name: "Mission 2 locked" }).getByRole("button")).toHaveCount(0);
+  const size = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth }));
+  expect(size.scroll).toBeLessThanOrEqual(size.client);
 });
 
 test("fresh hub is responsive and saved discovery choices resume after reload", async ({ page }) => {
