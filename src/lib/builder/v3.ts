@@ -39,7 +39,7 @@ export type V3WorkflowStep =
   | { id: string; type: "delete"; collection: string; target: "current" | { createdBy: string } }
   | { id: string; type: "feedback"; text: string }
   | { id: string; type: "navigate"; screen: string };
-export interface V3Workflow { id: string; label: string; collection: string; inputs?: string[]; steps: V3WorkflowStep[] }
+export interface V3Workflow { id: string; label: string; collection: string; inputs?: string[]; enabledWhen?: V3Expr; steps: V3WorkflowStep[] }
 export interface V3Collection extends V2Collection { relationships: V3Relationship[]; computed?: V3ComputedField[]; constraints?: V3Constraint[] }
 export interface GeneratedAppV3 {
   format: "buildloop-app-v3"; title: string; summary: string; defaultScreen: string;
@@ -119,8 +119,7 @@ export function validateArtifactV3(value: unknown, maxBytes = MAX_BYTES): { ok: 
     for (const rel of relationships) {
       if (!object(rel) || !ownKeys(rel, ["id", "field", "label", "targetCollection", "cardinality", "required", "onDelete"]) || typeof rel.id !== "string" || !ID.test(rel.id) || relIds.has(rel.id) || typeof rel.field !== "string" || !ID.test(rel.field) || relFieldIds.has(`${String(raw.id)}.${rel.field}`) || !safeText(rel.label, 80) || !collectionMap.has(String(rel.targetCollection)) || !["one", "many"].includes(String(rel.cardinality)) || !["restrict", "nullify", "cascade"].includes(String(rel.onDelete)) || rel.required !== undefined && typeof rel.required !== "boolean") { issues.push(`Collection ${String(raw.label)} has an invalid relationship`); continue; }
       if (fieldMap.has(String(rel.field))) issues.push(`Relationship field ${String(rel.field)} conflicts with a stored field`);
-      if (rel.onDelete === "nullify" && (rel.required === true || rel.cardinality === "many")) issues.push(`Relationship ${String(rel.id)} cannot be nullified`);
-      if (rel.onDelete === "cascade" && rel.cardinality === "many") issues.push(`Many relationships cannot cascade deletion`);
+      if (rel.onDelete === "nullify" && rel.required === true) issues.push(`Required relationship ${String(rel.id)} cannot be nullified`);
       relIds.add(rel.id); relFieldIds.add(`${String(raw.id)}.${rel.field}`);
     }
     const computed = Array.isArray(raw.computed) ? raw.computed : [];
@@ -158,6 +157,12 @@ export function validateArtifactV3(value: unknown, maxBytes = MAX_BYTES): { ok: 
   const active = new Set<string>(), done = new Set<string>();
   const hasCycle = (id: string): boolean => { if (active.has(id)) return true; if (done.has(id)) return false; active.add(id); for (const ref of computedGraph.get(id) ?? []) if (hasCycle(ref)) return true; active.delete(id); done.add(id); return false; };
   if ([...computedGraph.keys()].some(hasCycle)) issues.push("Computed values cannot depend on themselves or form a cycle");
+  for (const { collection, item } of allComputed) {
+    const owner = collectionMap.get(collection);
+    if (!owner || !expressionReferencesValid(item.expression, owner, collectionMap)) issues.push(`Computed value ${String(item.label)} refers to a missing or incompatible field`);
+    const inferred = inferExpressionType(item.expression, owner, collectionMap, computedById, new Set());
+    if (inferred && inferred !== item.type) issues.push(`Computed value ${String(item.label)} must return ${String(item.type)}`);
+  }
   for (const screen of Array.isArray(value.screens) ? value.screens : []) {
     if (!object(screen) || typeof screen.collection !== "string") continue;
     const collection = collectionMap.get(screen.collection);
@@ -174,9 +179,10 @@ export function validateArtifactV3(value: unknown, maxBytes = MAX_BYTES): { ok: 
   if (workflows.length > 20) issues.push("Use no more than 20 workflows");
   const workflowIds = new Set<string>();
   for (const workflow of workflows) {
-    if (!object(workflow) || !ownKeys(workflow, ["id", "label", "collection", "inputs", "steps"]) || typeof workflow.id !== "string" || !ID.test(workflow.id) || workflowIds.has(workflow.id) || !safeText(workflow.label, 80) || !collectionMap.has(String(workflow.collection)) || !Array.isArray(workflow.steps) || workflow.steps.length < 1 || workflow.steps.length > MAX_WORKFLOW_STEPS || Array.isArray(workflow.inputs) && workflow.inputs.length > 8) { issues.push("A workflow is malformed or exceeds the 12-step limit"); continue; }
+    if (!object(workflow) || !ownKeys(workflow, ["id", "label", "collection", "inputs", "enabledWhen", "steps"]) || typeof workflow.id !== "string" || !ID.test(workflow.id) || workflowIds.has(workflow.id) || !safeText(workflow.label, 80) || !collectionMap.has(String(workflow.collection)) || !Array.isArray(workflow.steps) || workflow.steps.length < 1 || workflow.steps.length > MAX_WORKFLOW_STEPS || Array.isArray(workflow.inputs) && workflow.inputs.length > 8) { issues.push("A workflow is malformed or exceeds the 12-step limit"); continue; }
     workflowIds.add(workflow.id);
     const sourceCollection = collectionMap.get(String(workflow.collection))!;
+    if (workflow.enabledWhen !== undefined && (!validateExpression(workflow.enabledWhen) || !expressionReferencesValid(workflow.enabledWhen, sourceCollection, collectionMap) || inferExpressionType(workflow.enabledWhen, sourceCollection, collectionMap, computedById, new Set()) !== "boolean")) issues.push(`Workflow ${workflow.id} has an invalid availability condition`);
     const inputIds = new Set<string>();
     for (const input of Array.isArray(workflow.inputs) ? workflow.inputs : []) {
       const inputCollections = workflow.steps.filter(object).filter((step) => step.type === "create" && typeof step.collection === "string").map((step) => collectionMap.get(String(step.collection))).filter((item): item is Record<string, unknown> => Boolean(item));
@@ -237,6 +243,40 @@ function validValueSource(value: unknown, fieldId: string, target: Record<string
   return typeof literal === "string" && safeText(literal, 180);
 }
 
+function expressionReferencesValid(expression: unknown, owner: Record<string, unknown>, collections: Map<string, Record<string, unknown>>): boolean {
+  if (!object(expression)) return false;
+  if (expression.op === "field") return typeof expression.field === "string" && ([...(Array.isArray(owner.fields) ? owner.fields.filter(object).map((field) => String(field.id)) : []), ...(Array.isArray(owner.relationships) ? owner.relationships.filter(object).map((rel) => String(rel.field)) : []), ...(Array.isArray(owner.computed) ? owner.computed.filter(object).map((field) => String(field.id)) : [])].includes(expression.field));
+  if (expression.op === "countRelated" || expression.op === "sumRelated") {
+    const related = [...collections.values()].flatMap((collection) => (Array.isArray(collection.relationships) ? collection.relationships.filter(object).map((rel) => ({ collection, rel })) : [])).find(({ rel }) => rel.id === expression.relationship);
+    if (!related || related.rel.targetCollection !== owner.id) return false;
+    return expression.op === "countRelated" || Array.isArray(related.collection.fields) && related.collection.fields.some((field) => object(field) && field.id === expression.field && field.type === "number");
+  }
+  return Object.values(expression).filter((value) => typeof value === "object" && value !== null).every((value) => Array.isArray(value) ? value.every((item) => expressionReferencesValid(item, owner, collections)) : expressionReferencesValid(value, owner, collections));
+}
+
+function inferExpressionType(expression: unknown, owner: Record<string, unknown> | undefined, collections: Map<string, Record<string, unknown>>, computed: Map<string, Record<string, unknown>>, active: Set<string>): string | null {
+  if (!object(expression) || !owner || typeof expression.op !== "string") return null;
+  const typeOf = (item: unknown) => inferExpressionType(item, owner, collections, computed, active);
+  switch (expression.op) {
+    case "literal": return expression.value === null ? null : typeof expression.value === "string" ? "text" : typeof expression.value;
+    case "field": {
+      if (typeof expression.field !== "string") return null;
+      const key = `${String(owner.id)}.${expression.field}`;
+      const calculated = computed.get(key);
+      if (calculated && !active.has(key)) { active.add(key); const result = typeOf(calculated.expression); active.delete(key); return result; }
+      const stored = Array.isArray(owner.fields) ? owner.fields.find((field) => object(field) && field.id === expression.field) : undefined;
+      if (object(stored)) return ["text", "longText", "select", "status", "date", "reference"].includes(String(stored.type)) ? "text" : String(stored.type);
+      const relationship = Array.isArray(owner.relationships) ? owner.relationships.find((rel) => object(rel) && rel.field === expression.field) : undefined;
+      return object(relationship) && relationship.cardinality === "one" ? "text" : null;
+    }
+    case "countRelated": case "sumRelated": return "number";
+    case "add": case "subtract": case "multiply": return typeOf(expression.left) === "number" && typeOf(expression.right) === "number" ? "number" : null;
+    case "equals": case "notEquals": case "gte": case "gt": case "lte": case "lt": case "and": case "or": case "not": return "boolean";
+    case "if": { const yes = typeOf(expression.then), no = typeOf(expression.otherwise); return typeOf(expression.test) === "boolean" && yes === no ? yes : null; }
+    default: return null;
+  }
+}
+
 export function seedRuntimeDataV3(artifact: GeneratedAppV3): RuntimeData { return seedRuntimeData(artifact as unknown as Parameters<typeof seedRuntimeData>[0]); }
 
 export function validateRuntimeDataV3(artifact: GeneratedAppV3, value: unknown): { ok: true; data: RuntimeData } | { ok: false; issues: string[] } {
@@ -259,6 +299,10 @@ export function validateRuntimeDataV3(artifact: GeneratedAppV3, value: unknown):
   const ids = new Map<string, Set<string>>();
   for (const collection of artifact.collections) { const seen = new Set<string>(); for (const row of data[collection.id]) { if (seen.has(String(row.id))) return { ok: false, issues: [`${collection.label} has duplicate record ids`] }; seen.add(String(row.id)); } ids.set(collection.id, seen); }
   let relationshipValues = 0;
+  for (const collection of artifact.collections) for (const field of collection.fields) if (field.type === "reference") {
+    const availableIds = ids.get(field.collection);
+    for (const row of data[collection.id]) if (row[field.id] !== undefined && row[field.id] !== null && row[field.id] !== "" && (typeof row[field.id] !== "string" || !availableIds?.has(row[field.id] as string))) return { ok: false, issues: [`${field.label} points to a record that no longer exists`] };
+  }
   for (const collection of artifact.collections) for (const relationship of collection.relationships) for (const row of data[collection.id]) {
     const storedComputed = collection.computed?.find((computed) => Object.hasOwn(row, computed.id));
     if (storedComputed) return { ok: false, issues: [`${storedComputed.label} is calculated and cannot be saved`] };
@@ -325,10 +369,31 @@ export function getComputedValues(artifact: GeneratedAppV3, data: RuntimeData, c
   return result;
 }
 
+export function unmetWorkflowRule(artifact: GeneratedAppV3, data: RuntimeData, collectionId: string, row: Record<string, unknown>) {
+  for (const rule of artifact.collections.find((item) => item.id === collectionId)?.constraints ?? []) if (rule.type === "maxRelated") {
+    const related = artifact.collections.flatMap((child) => child.relationships.map((relationship) => ({ child, relationship }))).find(({ relationship }) => relationship.id === rule.relationship);
+    const count = related ? (data[related.child.id] ?? []).filter((item) => item[related.relationship.field] === row.id).length : 0;
+    if (typeof row[rule.limitField] === "number" && count >= Number(row[rule.limitField])) return rule.label;
+  }
+  return null;
+}
+
+export function nextRecordId(data: RuntimeData, collectionId: string) {
+  const ids = new Set(Object.values(data).flatMap((rows) => rows.map((row) => row.id)));
+  const prefix = collectionId.slice(0, 18);
+  let suffix = Object.values(data).reduce((sum, rows) => sum + rows.length, 0);
+  let id = `${prefix}_${suffix.toString(36)}`;
+  while (ids.has(id)) { suffix += 1; id = `${prefix}_${suffix.toString(36)}`; }
+  return id;
+}
+
 export function applyWorkflow(artifact: GeneratedAppV3, source: RuntimeData, workflow: V3Workflow, currentId: string, inputs: Record<string, V3Value> = {}) {
   const data = structuredClone(source);
   const current = data[workflow.collection]?.find((row) => row.id === currentId);
   if (!current) return { ok: false as const, data: source, feedback: "This record is no longer available." };
+  if (workflow.enabledWhen && !evaluateV3Expression(artifact, data, workflow.collection, current, workflow.enabledWhen)) {
+    return { ok: false as const, data: source, feedback: unmetWorkflowRule(artifact, data, workflow.collection, current) ?? `${workflow.label} is not available right now.` };
+  }
   const created = new Map<string, string>();
   let feedback = "";
   let navigation: string | undefined;
@@ -339,11 +404,7 @@ export function applyWorkflow(artifact: GeneratedAppV3, source: RuntimeData, wor
     const rows = data[step.collection] ?? [];
     if (step.type === "create") {
       if (rows.length >= MAX_RECORDS) return { ok: false as const, data: source, feedback: "This list is full. Remove an old record before adding another." };
-      const usedIds = new Set(Object.values(data).flatMap((records) => records.map((record) => record.id)));
-      const prefix = step.collection.slice(0, 16);
-      let suffix = Object.values(data).reduce((sum, all) => sum + all.length, 0);
-      let id = `${prefix}_${suffix.toString(36)}`;
-      while (usedIds.has(id)) { suffix += 1; id = `${prefix}_${suffix.toString(36)}`; }
+      const id = nextRecordId(data, step.collection);
       const values = Object.fromEntries(Object.entries(step.values).map(([key, value]) => [key, read(value)]));
       const target = artifact.collections.find((item) => item.id === step.collection);
       const defaults = Object.fromEntries((target?.fields ?? []).filter((field) => field.default !== undefined && values[field.id] === undefined).map((field) => [field.id, field.default]));
@@ -372,6 +433,9 @@ function deleteRecord(data: RuntimeData, artifact: GeneratedAppV3, collectionId:
   const current = (data[collectionId] ?? []).find((row) => row.id === recordId);
   if (!current) return "This action could not find the record it needs.";
   const dependents: Array<{ child: V3Collection; rel: V3Relationship; rows: Record<string, unknown>[] }> = [];
+  for (const child of artifact.collections) for (const field of child.fields.filter((item) => item.type === "reference" && item.collection === collectionId)) {
+    if ((data[child.id] ?? []).some((row) => row[field.id] === recordId)) return `Cannot remove ${artifact.collections.find((item) => item.id === collectionId)?.label ?? "this record"} while ${field.label.toLowerCase()} still use it.`;
+  }
   for (const child of artifact.collections) for (const rel of child.relationships.filter((item) => item.targetCollection === collectionId)) {
     const refs = (data[child.id] ?? []).filter((row) => rel.cardinality === "many" ? Array.isArray(row[rel.field]) && (row[rel.field] as unknown[]).includes(recordId) : row[rel.field] === recordId);
     if (refs.length) dependents.push({ child, rel, rows: refs });

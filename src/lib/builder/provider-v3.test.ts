@@ -16,7 +16,7 @@ describe("deterministic V3 Builder fallback", () => {
   });
 
   it("selects the equipment fixture for borrowing workflows", async () => {
-    const result = await deterministicBuilder.generate(request("Students need equipment checkout and returns", "Track borrowers, gear, and active checkouts."));
+    const result = await deterministicBuilder.generate(request("Students need equipment checkout and returns", "Track borrowers, gear, and active checkouts as linked records."));
     expect(result.provider).toBe("deterministic");
     expect(result.artifact.format).toBe("buildloop-app-v3");
     if (result.artifact.format === "buildloop-app-v3") expect(result.artifact.workflows.map((workflow) => workflow.id)).toEqual(["checkout_item", "return_item"]);

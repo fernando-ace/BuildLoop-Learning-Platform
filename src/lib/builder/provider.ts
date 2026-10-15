@@ -86,7 +86,7 @@ export const deterministicBuilder: BuilderProvider = {
   name: "deterministic",
     async generate(request) {
       const prompt = `${request.project.problem} ${request.project.behavior} ${request.instruction}`;
-      const relational = /\b(related|relationship|belongs to|sign.?up|registration|volunteer|borrow|checkout|attendance|capacity|shift|parent and child|linked records)\b/i.test(prompt);
+      const relational = /\b(related|relationship|belongs to|registration|attendance|capacity|parent and child|linked records|connected records|linked entities|related entities)\b/i.test(prompt) || /connect(?:s|ed|ing)?\s+(?:the\s+)?(?:events?|shifts?|volunteers?|equipment|records|entities)/i.test(prompt);
       const artifact = request.previous?.format === "buildloop-app-v3" || relational ? deterministicV3Artifact(request) : deterministicV2Artifact(request);
       const result = validateArtifact(withObservedChanges(request, artifact));
       if (!result.ok) throw new BuilderError("invalid_output", result.issues.join("; "));

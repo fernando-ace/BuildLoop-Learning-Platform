@@ -1,3 +1,4 @@
+import type { GeneratedAppV2 } from "./v2";
 import type { GeneratedAppV3, V3Collection } from "./v3";
 
 export type V3ChangeRisk = "safe" | "migration" | "destructive" | "incompatible";
@@ -62,6 +63,19 @@ export function diffV3Workflows(before: GeneratedAppV3, after: GeneratedAppV3): 
   for (const [id, item] of newItems) { const old = oldItems.get(id); if (!old) changes.push({ kind: "workflow-added", risk: "safe", itemId: id, label: `Added action ${item.label}`, detail: `Added the ${item.label} action.` }); else if (!equal(old, item)) changes.push({ kind: "workflow-changed", risk: "safe", itemId: id, label: `Changed action ${item.label}`, detail: `Changed the steps in ${item.label}.` }); }
   for (const [id, item] of oldItems) if (!newItems.has(id)) changes.push({ kind: "workflow-removed", risk: "safe", itemId: id, label: `Removed action ${item.label}`, detail: `Removed the ${item.label} action.` });
   return changes;
+}
+
+export function diffV2ToV3(before: GeneratedAppV2, after: GeneratedAppV3): V3SchemaChange[] {
+  const adapted: GeneratedAppV3 = {
+    ...before, format: "buildloop-app-v3", workflows: [],
+    collections: before.collections.map((collection) => ({
+      ...collection,
+      fields: collection.fields.filter((field) => field.type !== "reference"),
+      relationships: collection.fields.filter((field): field is Extract<typeof field, { type: "reference" }> => field.type === "reference").map((field) => ({ id: field.id, field: field.id, label: field.label, targetCollection: field.collection, cardinality: "one" as const, required: field.required, onDelete: "restrict" as const })),
+      computed: [], constraints: [],
+    })),
+  };
+  return diffV3ApplicationSchemas(adapted, after);
 }
 
 export function describeV3SchemaChanges(changes: V3SchemaChange[]) { return changes.map((change) => change.label); }

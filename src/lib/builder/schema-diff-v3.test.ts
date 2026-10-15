@@ -1,8 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { volunteerOperationsV3 } from "./v3-fixtures";
-import { diffV3ApplicationSchemas } from "./schema-diff-v3";
+import { diffV2ToV3, diffV3ApplicationSchemas } from "./schema-diff-v3";
+import { v2Fixtures } from "./v2";
 
 describe("V3 schema changes", () => {
+  it("compares V2 schemas to V3 without losing prior reference fields", () => {
+    const changes = diffV2ToV3(v2Fixtures[0], volunteerOperationsV3);
+    expect(changes.some((change) => change.kind === "collection-added")).toBe(true);
+    expect(changes.every((change) => Boolean(change.kind && change.label && change.risk && change.detail))).toBe(true);
+  });
+
   it("preserves relationship identity when only the learner-facing label changes", () => {
     const before = structuredClone(volunteerOperationsV3);
     const after = structuredClone(volunteerOperationsV3);

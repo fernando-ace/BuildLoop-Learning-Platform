@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { clubAttendanceV3, equipmentCheckoutV3, volunteerOperationsV3 } from "./v3-fixtures";
-import { applyWorkflow, evaluateV3Expression, seedRuntimeDataV3, validateArtifactV3, validateRuntimeDataV3 } from "./v3";
+import { applyWorkflow, evaluateV3Expression, resolveRelationship, seedRuntimeDataV3, validateArtifactV3, validateRuntimeDataV3 } from "./v3";
 
 const copy = <T,>(value: T): T => structuredClone(value);
 
@@ -36,6 +36,13 @@ describe("V3 artifact validation", () => {
     const badPolicy = copy(clubAttendanceV3);
     badPolicy.collections[3].relationships[0].onDelete = "nullify";
     expect(validateArtifactV3(badPolicy)).toMatchObject({ ok: false });
+    const badAction = copy(volunteerOperationsV3);
+    if (badAction.workflows[0].steps[0].type === "create") badAction.workflows[0].steps[0].values.shift_id = { source: "literal", value: "javascript:alert(1)" };
+    expect(validateArtifactV3(badAction)).toMatchObject({ ok: false });
+    const cascadeCycle = copy(clubAttendanceV3);
+    cascadeCycle.collections[1].relationships[0].onDelete = "cascade";
+    cascadeCycle.collections[0].relationships.push({ id: "club_member", field: "member_id", label: "Member", targetCollection: "members", cardinality: "one", onDelete: "cascade" });
+    expect(validateArtifactV3(cascadeCycle)).toMatchObject({ ok: false });
   });
 });
 
@@ -47,6 +54,15 @@ describe("V3 relational runtime", () => {
     expect(evaluateV3Expression(volunteerOperationsV3, data, "shifts", shift, { op: "subtract", left: { op: "field", field: "capacity" }, right: { op: "countRelated", relationship: "registration_shift" } })).toBe(1);
     const result = validateRuntimeDataV3(volunteerOperationsV3, data);
     expect(result.ok, result.ok ? "" : result.issues.join("; ")).toBe(true);
+  });
+
+  it("supports multiple references from one record", () => {
+    const artifact = copy(clubAttendanceV3);
+    artifact.collections[1].relationships[0].cardinality = "many";
+    artifact.collections[1].seed![0].club_id = ["club_robotics"];
+    expect(validateArtifactV3(artifact)).toMatchObject({ ok: true });
+    const data = seedRuntimeDataV3(artifact);
+    expect(resolveRelationship(artifact, data, "members", data.members[0], "member_club")).toMatchObject([{ id: "club_robotics" }]);
   });
 
   it("commits a valid signup, and rejects duplicate/full attempts without partial writes", () => {
@@ -78,6 +94,9 @@ describe("V3 relational runtime", () => {
     const returnResult = applyWorkflow(equipmentCheckoutV3, first.data, returned, first.data.checkouts[0].id as string);
     expect(returnResult.ok).toBe(true);
     if (!returnResult.ok) return;
+    const repeatedReturn = applyWorkflow(equipmentCheckoutV3, returnResult.data, returned, returnResult.data.checkouts[0].id as string);
+    expect(repeatedReturn.ok).toBe(false);
+    expect(repeatedReturn.data).toEqual(returnResult.data);
     expect(applyWorkflow(equipmentCheckoutV3, returnResult.data, checkout, "camera_1", { borrower_id: "borrower_jo" }).ok).toBe(true);
   });
 
