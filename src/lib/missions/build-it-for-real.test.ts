@@ -25,6 +25,13 @@ describe("Mission 6: Build It for Real", () => {
     expect(build.overlap).toBe(false);
   });
 
+  it("leaves the organizer view incomplete when the volunteer task was not discovered", () => {
+    const withoutTask = mission6Build(stateAt(4, { selectedFeatures: core, questionsAsked: ["pain"], brief: "focused" }));
+    const withTask = mission6Build(stateAt(4, { selectedFeatures: core, questionsAsked: ["pain", "task"], brief: "focused" }));
+    expect(withoutTask.coverage).toBe(false);
+    expect(withTask.coverage).toBe(true);
+  });
+
   it("makes excessive scope visible in the product and scoring", () => {
     const state = stateAt(4, { selectedFeatures: [...core, "profiles", "announcements", "analytics", "themes"] });
     expect(mission6Build(state).extras).toBe(4);
@@ -45,8 +52,12 @@ describe("Mission 6: Build It for Real", () => {
   });
 
   it("distinguishes a focused next goal from a broad one", () => {
-    expect(mission6Build(stateAt(8, { selectedFeatures: core, goal: "focused", buildCount: 1 })).overlap).toBe(true);
-    expect(mission6Build(stateAt(8, { selectedFeatures: core, goal: "broad", buildCount: 1 })).overlap).toBe(false);
+    const focused = mission6Build(stateAt(8, { selectedFeatures: core, goal: "focused", buildCount: 1, questionsAsked: ["task"] }));
+    const broad = mission6Build(stateAt(8, { selectedFeatures: core, goal: "broad", buildCount: 1, questionsAsked: ["task"] }));
+    expect(focused.overlap).toBe(true);
+    expect(broad.overlap).toBe(false);
+    expect(broad.extras).toBe(2);
+    expect(broad.coverage).toBe(true);
     expect(mission6Scores(stateAt(6, { goal: "focused" })).find((skill) => skill.name === "Iteration")?.score).toBe(65);
     expect(mission6Scores(stateAt(6, { goal: "broad" })).find((skill) => skill.name === "Iteration")?.score).toBe(30);
   });

@@ -86,16 +86,17 @@ export type Mission6Action =
 export function mission6Build(state: Pick<Mission6State, "selectedFeatures" | "brief" | "questionsAsked" | "goal" | "buildCount" | "followUp">) {
   const has = (id: string) => state.selectedFeatures.includes(id);
   const briefKind = mission6Definition.briefs.find((brief) => brief.id === state.brief)?.kind;
-  const extras = state.selectedFeatures.filter((id) => !mission6Definition.features.find((feature) => feature.id === id)?.core).length;
+  const selectedExtras = state.selectedFeatures.filter((id) => !mission6Definition.features.find((feature) => feature.id === id)?.core).length;
+  const extras = selectedExtras + (state.buildCount > 0 && state.goal === "broad" ? 2 : 0);
   const discovery = state.questionsAsked.includes("pain") && state.questionsAsked.includes("task");
   const signup = has("shifts") && has("signup");
   const confirmed = has("confirmation") || briefKind === "focused";
   const capacity = has("capacity");
-  const coverage = has("coverage") && extras < 3;
+  const coverage = has("coverage") && extras < 3 && state.questionsAsked.includes("task");
   let overlap = state.buildCount === 0 && briefKind === "focused";
   let v2Regression = false;
   if (state.buildCount > 0) {
-    if (state.goal === "focused" || state.followUp === "evidence") overlap = true;
+    if (state.goal === "focused" || (state.followUp === "evidence" && state.buildCount > 1)) overlap = true;
     if (state.goal === "guess") { overlap = true; v2Regression = true; }
   }
   return { signup, confirmed, capacity: capacity && !v2Regression, coverage, overlap, extras, discovery, briefKind, v2Regression };
@@ -184,6 +185,7 @@ export function mission6Summary(state: Mission6State) {
     firstTry: !state.overlapTried ? "You did not try the overlapping shift." : build.overlap ? "The app stopped the second overlapping signup." : "Jordan could take two shifts that overlap.",
     feedback: state.feedbackChoices.map((id) => mission6Definition.feedback.find((item) => item.id === id)?.label ?? id),
     goal,
+    followUp: state.followUp === "evidence" ? "You described Jordan’s new result and what should happen." : state.followUp ? "You asked for another change without explaining what happened." : "The first change worked; no follow-up was needed.",
     builder: state.goal === "focused" ? "The Builder added an overlap check and kept the space limit." : state.goal === "guess" ? "The Builder hid overlapping shifts, but the space limit stopped working." : state.goal === "broad" ? "The Builder changed several parts at once; the space limit needs another check." : "The Builder made a small unclear change, and overlapping signups may still get through.",
     retest: !state.retestOverlapTried ? "You did not repeat the overlapping signup after the change." : retest ? "You repeated the steps; the overlapping signup was stopped." : "You repeated the steps, but the overlapping signup was still accepted.",
     nearby: !state.nearbyOverbookTried ? "You did not check the last open space." : nearby ? "The app stopped a third volunteer from taking a full shift." : "A third volunteer could take a shift after its spaces were full.",
