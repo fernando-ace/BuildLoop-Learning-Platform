@@ -4,7 +4,10 @@ import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } fro
 import { buildBrief, createProject, currentProject, goalCoaching, inspectInstruction, problemCoaching, recordBuild, recordFeedback, recordObservation, setBuildState, studioSummary, updateVersionNotes, type StudioProject, type StudioStage } from "@/lib/studio";
 import { buildPreviewDocument } from "@/lib/builder/preview";
 import { validateArtifact } from "@/lib/builder/contract";
-import { validateArtifactV2, type GeneratedAppV2 } from "@/lib/builder/v2";
+import { seedRuntimeData, type GeneratedAppV2 } from "@/lib/builder/v2";
+import { applyRuntimeMigration, planRuntimeMigration, validateRuntimeData } from "@/lib/builder/migration";
+import { describeSchemaChanges, diffApplicationSchemas } from "@/lib/builder/schema-diff";
+import type { StudioMigrationProvenance } from "@/lib/studio";
 import { createStudioProject, deleteStudioProject, getServerStudioState, getStudioState, getStudioStorageMessage, openStudioProject, setStudioStage, showStudioHub, subscribeStudio, updateStudioProject } from "@/lib/studio-store";
 
 const labels: Record<StudioStage, string> = { idea: "Your idea", scope: "Version 1", brief: "Builder Brief", try: "Try it", feedback: "Feedback", goal: "Next goal", retest: "Retest", summary: "Project summary" };
@@ -25,10 +28,65 @@ function ArtifactChanges({ items }: { items: string[] }) {
   return <div className="studio-artifact-changes">{groups.map(({ group, items: entries }) => <section key={group}><strong>{group}</strong>{entries.map((item) => <p key={item}>{item}</p>)}</section>)}{leftovers.map((item) => <p key={item}>{item}</p>)}</div>;
 }
 
-function V2PreviewFrame({ artifact, projectId, version }: { artifact: GeneratedAppV2; projectId: string; version: number }) {
+function SchemaComparison({ before, after }: { before: StudioProject["versions"][number]; after: StudioProject["versions"][number] }) {
+  const oldArtifact = before.result.artifact, newArtifact = after.result.artifact;
+  const changes = oldArtifact?.format === "buildloop-app-v2" && newArtifact?.format === "buildloop-app-v2" ? diffApplicationSchemas(oldArtifact, newArtifact) : [];
+  const groups = [
+    ["Data model", changes.filter((change) => change.kind.startsWith("collection-") || change.kind.startsWith("field-") || change.kind === "sample-data-changed")],
+    ["App", changes.filter((change) => change.kind === "app-title-changed" || change.kind === "app-summary-changed")],
+    ["Views", changes.filter((change) => change.kind.startsWith("view-"))],
+    ["Forms", changes.filter((change) => change.kind.startsWith("form-"))],
+    ["Actions", changes.filter((change) => change.kind.startsWith("action-"))],
+    ["Search and filtering", changes.filter((change) => change.kind === "search-changed" || change.kind === "filter-changed")],
+    ["Metrics", changes.filter((change) => change.kind.startsWith("metric-"))],
+    ["Navigation", changes.filter((change) => change.kind === "navigation-changed")],
+  ] as const;
+  return <details className="studio-version-comparison"><summary>Compare Version {before.number} with Version {after.number}</summary>
+    {groups.map(([label, items]) => items.length > 0 && <section key={label}><strong>{label}</strong><ul>{describeSchemaChanges([...items]).map((item) => <li key={item}>{item}</li>)}</ul></section>)}
+    {!changes.length && <p>These versions use different app formats or have no V2 schema changes to compare.</p>}
+  </details>;
+}
+
+function MigrationSummary({ migration }: { migration: NonNullable<StudioProject["versions"][number]["migration"]> }) {
+  return <section className={`studio-migration-summary ${migration.warnings.length ? "has-warnings" : ""}`} aria-label={`Version ${migration.targetVersion} data migration`}>
+    <span className="eyebrow">DATA IN VERSION {migration.targetVersion}</span>
+    <p><strong>{migration.migratedRecords} record{migration.migratedRecords === 1 ? "" : "s"} carried forward</strong>{migration.defaultedValues ? ` · ${migration.defaultedValues} field value${migration.defaultedValues === 1 ? "" : "s"} filled or reset` : ""}</p>
+    {migration.removedRecords > 0 && <p>{migration.removedRecords} record{migration.removedRecords === 1 ? "" : "s"} remain in Version {migration.sourceVersion} history.</p>}
+    {migration.warnings.map((warning) => <p key={warning} role="status">{warning}</p>)}
+  </section>;
+}
+
+function V2PreviewFrame({ artifact, previousArtifact, projectId, version, onMigration }: { artifact: GeneratedAppV2; previousArtifact?: GeneratedAppV2; projectId: string; version: number; onMigration?: (migration: StudioMigrationProvenance) => void }) {
   const frame = useRef<HTMLIFrameElement>(null);
+  const migrationCallback = useRef(onMigration);
+  useEffect(() => { migrationCallback.current = onMigration; }, [onMigration]);
   const storageKey = `buildloop-runtime-v2:${encodeURIComponent(projectId)}:${version}`;
   useEffect(() => {
+    const readSnapshot = (raw: string | null, expectedArtifact: GeneratedAppV2, expectedVersion: number) => {
+      if (!raw) return { data: null as unknown, invalid: false };
+      const saved = JSON.parse(raw) as unknown;
+      if (!saved || typeof saved !== "object" || Array.isArray(saved)) return { data: null, invalid: true };
+      const envelope = saved as Record<string, unknown>;
+      const data = envelope.format === "buildloop-runtime-snapshot-v1"
+        ? envelope.projectId === projectId && envelope.version === expectedVersion && envelope.artifactFormat === "buildloop-app-v2" ? envelope.data : null
+        : saved;
+      const checked = validateRuntimeData(expectedArtifact, data);
+      return checked.ok ? { data: checked.data as unknown, invalid: false } : { data: null, invalid: true };
+    };
+    const saveSnapshot = (data: unknown) => {
+      const serializedData = JSON.stringify(data);
+      if (new TextEncoder().encode(serializedData).length > 64_000) throw new Error("size");
+      const envelope = JSON.stringify({ format: "buildloop-runtime-snapshot-v1", projectId, version, artifactFormat: "buildloop-app-v2", savedAt: new Date().toISOString(), data });
+      const runtimePrefix = `buildloop-runtime-v2:${encodeURIComponent(projectId)}:`;
+      let runtimeSize = 0;
+      for (let index = 0; index < window.localStorage.length; index += 1) {
+        const existingKey = window.localStorage.key(index);
+        if (existingKey?.startsWith(runtimePrefix)) runtimeSize += window.localStorage.getItem(existingKey)?.length ?? 0;
+      }
+      const previousSize = window.localStorage.getItem(storageKey)?.length ?? 0;
+      if (runtimeSize - previousSize + envelope.length > 1_600_000) throw new Error("size");
+      window.localStorage.setItem(storageKey, envelope);
+    };
     const onMessage = (event: MessageEvent) => {
       if (!frame.current?.contentWindow || event.source !== frame.current.contentWindow) return;
       const message = event.data;
@@ -37,38 +95,43 @@ function V2PreviewFrame({ artifact, projectId, version }: { artifact: GeneratedA
       if (message.type === "load") {
         try {
           const raw = window.localStorage.getItem(storageKey);
-          const saved = raw ? JSON.parse(raw) as unknown : null;
-          if (saved && typeof saved === "object" && !Array.isArray(saved)) {
-            const candidate = { ...artifact, collections: artifact.collections.map((collection) => ({ ...collection, seed: (saved as Record<string, unknown>)[collection.id] ?? collection.seed ?? [] })) };
-            const checked = validateArtifactV2(candidate, 120_000);
-            if (checked.ok) send("state", Object.fromEntries(checked.artifact.collections.map((collection) => [collection.id, collection.seed ?? []])));
-            else send("state", null);
-          } else send("state", null);
-        } catch { send("state", null); }
+          if (raw) {
+            const saved = readSnapshot(raw, artifact, version);
+            send("state", saved.data);
+            if (saved.invalid) send("error", "This version’s saved data could not be checked. Its original save was left untouched and the preview opened with sample data.");
+            return;
+          }
+          if (!previousArtifact || version < 2) { send("state", null); return; }
+          const previousVersion = version - 1;
+          const previousKey = `buildloop-runtime-v2:${encodeURIComponent(projectId)}:${previousVersion}`;
+          const previousRaw = window.localStorage.getItem(previousKey);
+          const sourceSnapshot = previousRaw ? readSnapshot(previousRaw, previousArtifact, previousVersion) : { data: seedRuntimeData(previousArtifact), invalid: false };
+          const plan = planRuntimeMigration(previousArtifact, artifact, sourceSnapshot.data, previousVersion, version);
+          const result = applyRuntimeMigration(previousArtifact, artifact, sourceSnapshot.data, plan);
+          const warnings = [...result.warnings];
+          if (sourceSnapshot.invalid) warnings.push(`Version ${previousVersion} data could not be checked; its original save is untouched.`);
+          let persisted = false;
+          try { saveSnapshot(result.data); persisted = true; }
+          catch { warnings.push("The new version is open, but this browser could not save its snapshot. Recent changes may not survive a refresh."); }
+          const migration: StudioMigrationProvenance = { sourceVersion: previousVersion, targetVersion: version, completedAt: new Date().toISOString(), ...result.counts, status: !result.ok ? "fallback" : warnings.length ? "warning" : previousRaw ? "migrated" : "initialized", changes: plan.changes.slice(0, 40).map(({ kind, collectionId, fieldId, itemId, destructive }) => ({ kind, collectionId, fieldId, itemId, destructive })), warnings: warnings.slice(0, 12) };
+          migrationCallback.current?.(migration);
+          send("state", result.data);
+          if (warnings.length) send("error", warnings.join(" "));
+          else if (!persisted) send("error", "The new version’s data could not be saved in this browser.");
+        } catch { send("error", "This browser could not read or migrate the previous version. The earlier save remains available."); send("state", null); }
       } else if (message.type === "save") {
         const runtimeData = message.data && typeof message.data === "object" && !Array.isArray(message.data) ? message.data as Record<string, unknown> : null;
         if (!runtimeData) { send("error", "Preview data could not be saved because its shape was invalid."); return; }
-        const candidate = { ...artifact, collections: artifact.collections.map((collection) => ({ ...collection, seed: runtimeData[collection.id] })) };
-        const checked = validateArtifactV2(candidate, 120_000);
+        const checked = validateRuntimeData(artifact, runtimeData);
         if (checked.ok) {
-          const serialized = JSON.stringify(Object.fromEntries(checked.artifact.collections.map((collection) => [collection.id, collection.seed ?? []])));
-          try {
-            const runtimePrefix = `buildloop-runtime-v2:${encodeURIComponent(projectId)}:`;
-            let runtimeSize = 0;
-            for (let index = 0; index < window.localStorage.length; index += 1) {
-              const existingKey = window.localStorage.key(index);
-              if (existingKey?.startsWith(runtimePrefix)) runtimeSize += window.localStorage.getItem(existingKey)?.length ?? 0;
-            }
-            const previousSize = window.localStorage.getItem(storageKey)?.length ?? 0;
-          if (new TextEncoder().encode(serialized).length > 64_000 || runtimeSize - previousSize + serialized.length > 1_600_000) { send("error", "Preview data reached this browser’s local save limit. Remove some records before refreshing."); return; }
-            window.localStorage.setItem(storageKey, serialized);
-          } catch { send("error", "This browser could not save preview data. The current session remains open, but refreshing may lose recent changes."); }
+          try { saveSnapshot(checked.data); }
+          catch { send("error", "Preview data reached this browser’s local save limit. Remove some records before refreshing."); }
         } else send("error", "Preview data did not match this version’s field rules and was not saved.");
       }
     };
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [artifact, projectId, storageKey, version]);
+  }, [artifact, previousArtifact, projectId, storageKey, version]);
   const reset = () => frame.current?.contentWindow?.postMessage({ channel: "buildloop-v2", type: "reset", projectId, version }, "*");
   return <div className="studio-preview"><div className="studio-preview-head"><span className="eyebrow">INTERACTIVE APP PREVIEW · VERSION {version}</span><button className="text-button" type="button" onClick={reset}>Reset preview data</button></div><iframe ref={frame} title={`${artifact.title} interactive preview`} sandbox="allow-scripts" referrerPolicy="no-referrer" srcDoc={buildPreviewDocument(artifact, { projectId, version })} /></div>;
 }
@@ -127,7 +190,12 @@ export function Studio({ onBack, courseComplete }: { onBack: () => void; courseC
   const progress = project.stage !== "summary" ? <nav className="studio-progress" aria-label="Project steps">{stages.slice(0, 7).map((step, i) => <span key={step} className={i <= index ? "is-current" : ""}>{i + 1}<small>{labels[step]}</small></span>)}</nav> : null;
   const heading = (title: string, description: string) => <div className="studio-heading"><span className="eyebrow">{project.name} · {labels[project.stage].toUpperCase()}</span><h1>{title}</h1><p>{description}</p></div>;
   const continueButton = (label: string, onClick: () => void, disabled = false) => <div className="studio-actions"><button className="button button-primary" onClick={onClick} disabled={disabled} type="button">{label} →</button></div>;
-  const preview = (artifact: import("@/lib/builder/contract").GeneratedApp, version: number) => artifact.format === "buildloop-app-v2" ? <V2PreviewFrame artifact={artifact} projectId={project.id} version={version} /> : <div className="studio-preview"><div className="studio-preview-head"><span className="eyebrow">INTERACTIVE APP PREVIEW</span><span>Runs in an isolated preview</span></div><iframe title={`${artifact.title} interactive preview`} sandbox="allow-scripts" referrerPolicy="no-referrer" srcDoc={buildPreviewDocument(artifact)} /></div>;
+  const preview = (artifact: import("@/lib/builder/contract").GeneratedApp, version: number) => {
+    if (artifact.format !== "buildloop-app-v2") return <div className="studio-preview"><div className="studio-preview-head"><span className="eyebrow">INTERACTIVE APP PREVIEW</span><span>Runs in an isolated preview</span></div><iframe title={`${artifact.title} interactive preview`} sandbox="allow-scripts" referrerPolicy="no-referrer" srcDoc={buildPreviewDocument(artifact)} /></div>;
+    const source = project.versions.find((item) => item.number === version - 1)?.result.artifact;
+    const previousArtifact = source?.format === "buildloop-app-v2" ? source : undefined;
+    return <V2PreviewFrame artifact={artifact} previousArtifact={previousArtifact} projectId={project.id} version={version} onMigration={(migration) => updateStudioProject(project.id, (current) => ({ ...current, versions: current.versions.map((item) => item.number === version ? { ...item, migration } : item) }))} />;
+  };
   let content: React.ReactNode;
   if (project.stage === "idea") {
     const coaching = problemCoaching(project.problem, project.user);
@@ -149,7 +217,7 @@ export function Studio({ onBack, courseComplete }: { onBack: () => void; courseC
   } else if (project.stage === "try") {
     const latest = project.versions.at(-1)!;
     content = <>{heading("Try the app before asking for changes.", "Use it for a real task. Notice what worked, what felt confusing, and what surprised you.")}
-      <article className="studio-result"><span className="eyebrow">VERSION {latest.number} · {latest.result.provider === "deterministic" ? "DETERMINISTIC TEST BUILDER" : latest.result.provider === "openai" ? "AI BUILDER" : "LEGACY DEMO"}</span><h2>{latest.result.title}</h2><p>{latest.result.description}</p>{latest.result.artifact && <ArtifactChanges items={latest.result.artifact.changeSummary} />}<details><summary>Builder Brief used</summary><p>{latest.instruction}</p></details></article>
+      <article className="studio-result"><span className="eyebrow">VERSION {latest.number} · {latest.result.provider === "deterministic" ? "DETERMINISTIC TEST BUILDER" : latest.result.provider === "openai" ? "AI BUILDER" : "LEGACY DEMO"}</span><h2>{latest.result.title}</h2><p>{latest.result.description}</p>{project.versions.length > 1 && latest.result.artifact?.format === "buildloop-app-v2" && project.versions.at(-2)?.result.artifact?.format === "buildloop-app-v2" ? <ArtifactChanges items={describeSchemaChanges(diffApplicationSchemas(project.versions.at(-2)!.result.artifact as GeneratedAppV2, latest.result.artifact))} /> : latest.result.artifact && <ArtifactChanges items={latest.result.artifact.changeSummary} />}{latest.migration && <MigrationSummary migration={latest.migration} />}<details><summary>Builder Brief used</summary><p>{latest.instruction}</p></details></article>
       {latest.result.artifact ? preview(latest.result.artifact, latest.number) : <p className="studio-coach">This saved version was created before interactive previews were available.</p>}
       {latest.result.artifact && <section className="studio-test-hint"><strong>Try a task</strong><ul>{latest.result.artifact.testTasks.map((task) => <li key={task}><button className="text-button" type="button" onClick={() => setAction(task)}>{task}</button></li>)}</ul><p>Choose a suggestion or write your own task in your observation.</p></section>}
       {field("studio-version-notes", "A note for this version", latest.notes, (notes) => updateStudioProject(project.id, (current) => updateVersionNotes(current, notes)), "What do you want to remember about this build?")}
@@ -170,6 +238,8 @@ export function Studio({ onBack, courseComplete }: { onBack: () => void; courseC
     content = <>{heading("Try it again, then check nearby behavior.", "Repeat the earlier task to see whether your change helped. Then check that something nearby still works.")}
       {previousTest && <section className="studio-context"><span className="eyebrow">REPEAT YOUR VERSION {previousTest.version} TASK</span><p>You tried: {previousTest.action}</p><p>You expected: {previousTest.expected}</p><p>Then: {previousTest.happened}</p></section>}
       <article className="studio-result compact"><span className="eyebrow">VERSION {latest.number} · BUILDER CHANGE SUMMARY</span><p>{project.nextGoal}</p>{latest.result.artifact ? <ArtifactChanges items={latest.result.artifact.changeSummary} /> : <p>{latest.result.description}</p>}</article>
+      {latest.migration && <MigrationSummary migration={latest.migration} />}
+      {project.versions.length > 1 && <SchemaComparison before={project.versions.at(-2)!} after={latest} />}
       {latest.result.artifact && preview(latest.result.artifact, latest.number)}
       {field("studio-version-notes", "A note for this version", latest.notes, (notes) => updateStudioProject(project.id, (current) => updateVersionNotes(current, notes)), "What do you want to remember about this update?")}
       <section className="studio-test">{field("studio-retest-action", "Repeat: what did you do?", action, setAction, "Repeat the same steps as before")}{field("studio-retest-expected", "What did you expect this time?", expected, setExpected, "What should the change do?")}{field("studio-retest-happened", "What happened?", happened, setHappened, "What did you observe?")}{field("studio-nearby", "Check one nearby behavior", nearby, setNearby, "What else did you try, and did it still work?", true)}</section>
@@ -181,7 +251,7 @@ export function Studio({ onBack, courseComplete }: { onBack: () => void; courseC
       <section className="studio-evidence"><span className="eyebrow">WHAT YOU DID WELL</span><p>{summary.practiced.length ? summary.practiced.join(" · ") : "Each project is a chance to practice."}</p></section>
       {summary.practiceNext.length > 0 && <section className="studio-evidence"><span className="eyebrow">A COUPLE OF THINGS TO PRACTICE NEXT</span><p>{summary.practiceNext.join(" · ")}</p></section>}
       <section className="studio-share"><h2>Is this ready to share?</h2><p>Make a deliberate choice based on what you tested.</p><div><button className={`button ${project.shareDecision === "ready" ? "button-primary" : "button-quiet"}`} onClick={() => patch({ shareDecision: "ready" })}>Ready to share</button><button className={`button ${project.shareDecision === "keep_working" ? "button-primary" : "button-quiet"}`} onClick={() => patch({ shareDecision: "keep_working" })}>Keep working</button></div></section>
-      <div className="studio-history"><span className="eyebrow">PROJECT HISTORY</span>{project.versions.map((version) => <article key={version.number}><strong>Version {version.number}</strong><span>{new Date(version.builtAt).toLocaleString()}</span><p><b>Instruction:</b> {version.instruction}{version.notes && <> · <b>Note:</b> {version.notes}</>}</p><small>{version.tested ? "Tested" : "Not tested yet"}</small>{version.result.artifact && <button className="text-button" onClick={() => setViewingVersion(version.number)} type="button">Preview Version {version.number}</button>}</article>)}</div>
+      <div className="studio-history"><span className="eyebrow">PROJECT HISTORY</span>{project.versions.map((version, index) => <article key={version.number}><strong>Version {version.number}</strong><span>{new Date(version.builtAt).toLocaleString()}</span><p><b>Instruction:</b> {version.instruction}{version.notes && <> · <b>Note:</b> {version.notes}</>}</p><small>{version.tested ? "Tested" : "Not tested yet"}</small>{version.migration && <MigrationSummary migration={version.migration} />}{index > 0 && <SchemaComparison before={project.versions[index - 1]} after={version} />}{version.result.artifact && <button className="text-button" onClick={() => setViewingVersion(version.number)} type="button">Preview Version {version.number}</button>}</article>)}</div>
       {viewingVersion !== null && (() => { const version = project.versions.find((item) => item.number === viewingVersion); return version?.result.artifact ? <section><h2>Version {version.number} preview</h2>{preview(version.result.artifact, version.number)}<button className="text-button" onClick={() => setViewingVersion(null)} type="button">Close older preview</button></section> : null; })()}
       <div className="studio-actions"><button className="button button-quiet" onClick={() => advance("goal")}>Build another version</button><button className="button button-primary" onClick={showStudioHub}>All Studio projects →</button></div></>;
   }

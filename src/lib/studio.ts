@@ -2,7 +2,20 @@ export type StudioStage = "idea" | "scope" | "brief" | "try" | "feedback" | "goa
 export interface StudioFeature { id: string; text: string; inV1: boolean }
 export interface StudioObservation { action: string; expected: string; happened: string; kind: "core" | "nearby"; version: number }
 export interface StudioFeedback { from: string; note: string; version: number }
-export interface StudioVersion { number: number; instruction: string; builtAt: string; status: "complete"; notes: string; tested: boolean; result: BuilderResult; observations?: string[]; feedback?: string[]; retestedVersion?: number }
+export interface StudioMigrationProvenance {
+  sourceVersion: number;
+  targetVersion: number;
+  completedAt: string;
+  sourceRecords: number;
+  migratedRecords: number;
+  createdRecords: number;
+  removedRecords: number;
+  defaultedValues: number;
+  status: "migrated" | "initialized" | "warning" | "fallback";
+  changes: Array<Pick<import("./builder/schema-diff").SchemaChange, "kind" | "collectionId" | "fieldId" | "itemId" | "destructive">>;
+  warnings: string[];
+}
+export interface StudioVersion { number: number; instruction: string; builtAt: string; status: "complete"; notes: string; tested: boolean; result: BuilderResult; observations?: string[]; feedback?: string[]; retestedVersion?: number; migration?: StudioMigrationProvenance }
 export interface BuilderBrief { user: string; problem: string; behavior: string; constraints: string; scope: string[] }
 export interface BuilderResult { title: string; description: string; provider: "demo" | "openai" | "deterministic"; instruction: string; artifact?: import("./builder/contract").GeneratedApp; attempts?: number; usage?: { inputTokens?: number; outputTokens?: number } }
 export interface StudioBuild { status: "ready" | "building" | "validating" | "complete" | "failed"; message?: string; attempts: number; startedAt?: string }
