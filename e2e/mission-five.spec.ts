@@ -61,7 +61,7 @@ test("Mission 5 is locked until Mission 4; strong repair resumes, completes, and
   await page.evaluate(() => localStorage.clear());
   await page.reload();
   await expect(page.getByRole("article", { name: "Mission 5 locked" })).toContainText("Complete Mission 4 to continue");
-  await expect(page.locator(".mission-number").allTextContents()).resolves.toEqual(["MISSION 1", "MISSION 2", "MISSION 3", "MISSION 4", "MISSION 5"]);
+  await expect(page.locator(".mission-number").allTextContents()).resolves.toEqual(["MISSION 1", "MISSION 2", "MISSION 3", "MISSION 4", "MISSION 5", "MISSION 6 · FINAL PROJECT"]);
   await noHorizontalOverflow(page, 1440);
 
   await seedMission4Complete(page);
@@ -92,7 +92,7 @@ test("Mission 5 is locked until Mission 4; strong repair resumes, completes, and
   expect(saved.mission5Progress.latestSkillResults).toHaveLength(7);
   expect(saved.mission5Progress.bestSkillResults.find((skill: { name: string }) => skill.name === "Testing")?.score).toBe(100);
   await page.getByRole("button", { name: "Return to Missions" }).click();
-  await expect(page.getByText("5 of 5 missions complete")).toBeVisible();
+  await expect(page.getByText("5 of 6 missions complete")).toBeVisible();
   await expect(page.getByRole("article", { name: "Mission 5" })).toContainText("Completed");
   await page.getByRole("article", { name: "Mission 5" }).getByRole("button", { name: /Replay Mission/ }).click();
   await expect(page.getByRole("heading", { name: "ClubBoard is ready for a closer look." })).toBeVisible();

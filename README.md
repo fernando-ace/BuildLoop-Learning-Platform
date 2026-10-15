@@ -1,6 +1,6 @@
 # BuildLoop — Learn to build with AI
 
-BuildLoop is a browser game about learning to build useful software with AI. Five short missions help learners understand a person’s need, set a goal, guide an AI Builder, try what it made, use evidence to improve it, and decide when it is ready to share.
+BuildLoop is a browser game about learning to build useful software with AI. Missions 1–5 teach individual parts of the workflow. Mission 6 brings them together in a longer product project where learners investigate an event volunteer signup problem, shape a first version, guide the simulated Builder, try real tasks, respond to feedback, retest changes, and decide what is ready to share.
 
 ## Run locally
 
@@ -20,10 +20,11 @@ The course follows a growing product-building loop: human judgment → clear goa
 3. **Build, Try, Improve:** treat building as a conversation; try the result and give a focused follow-up.
 4. **What Should We Build Next?:** use real feedback to choose what matters and judge whether the result is ready.
 5. **Something’s Broken:** reproduce a problem in ClubBoard, report what you expected and what happened, retest the Builder’s repair, and check that another club still works.
+6. **Build It for Real:** combine the course skills to help a campus event team manage volunteer shifts, test a focused first version, and make a ship decision from what happened.
 
 Mission 5’s Builder behaves deterministically. A clear report fixes the membership display on the first build. A vague report misses the display issue, while an implementation guess changes the seat-count behavior and causes another club’s seat count to stop updating. Learners can report what they observe, receive a second build, repeat the original actions, and check Robotics Club before deciding whether to share.
 
-Mission scenarios, deterministic build outcomes, and skill scoring live in `src/lib/missions/`. Mission state is saved with the shared local progress record in [store.ts](src/lib/store.ts). Each mission has its own screen; Mission 5 adds fields to the existing save record and does not change its key, so existing Mission 1–4 saves remain available.
+Mission scenarios, deterministic build outcomes, and skill scoring live in `src/lib/missions/`. Mission state is saved with the shared local progress record in [store.ts](src/lib/store.ts). Each mission has its own screen; Mission 6 adds optional fields to the existing save record and does not change its key, so earlier learner progress remains available.
 
 ## Product decisions
 
@@ -51,4 +52,4 @@ Mission scenarios, deterministic build outcomes, and skill scoring live in `src/
 
 ## Recommended real-user experiment
 
-Observe teenagers aged 13–18 completing the five-mission course without coaching. Ask them to think aloud, then ask how they decided what to build, what they learned from a failed check, and what evidence they wanted before sharing. Track time by mission, skipped checks, confusing controls, and whether they distinguish what they saw from guesses about how the app works. Use those observations to revise the course before expanding it.
+Observe teenagers aged 13–18 completing the six-mission course without coaching. Ask them to think aloud, then ask how they decided what to build, what they learned from a failed check, and what evidence they wanted before sharing. Track time by mission, skipped checks, confusing controls, and whether they distinguish what they saw from guesses about how the app works. Use those observations to revise the course.

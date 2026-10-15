@@ -35,7 +35,7 @@ test("Mission 3 unlocks after Mission 2, resumes, reviews, retests, and replays 
   await page.evaluate(() => localStorage.clear());
   await page.reload();
   await expect(page.getByRole("article", { name: /Mission 3 locked/ })).toContainText("Complete Mission 2 to continue");
-  await expect(page.locator(".mission-number").allTextContents()).resolves.toEqual(["MISSION 1", "MISSION 2", "MISSION 3", "MISSION 4", "MISSION 5"]);
+  await expect(page.locator(".mission-number").allTextContents()).resolves.toEqual(["MISSION 1", "MISSION 2", "MISSION 3", "MISSION 4", "MISSION 5", "MISSION 6 · FINAL PROJECT"]);
   let hubWidth = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth }));
   expect(hubWidth.scroll).toBeLessThanOrEqual(hubWidth.client);
 
