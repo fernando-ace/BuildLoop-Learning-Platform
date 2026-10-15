@@ -10,10 +10,17 @@ function deterministicV2Artifact(request: BuilderRequest): GeneratedAppV2 {
   if (request.previous?.format === "buildloop-app-v2") {
     const previous = structuredClone(request.previous);
     const target = previous.collections[0];
-    const asksForDate = /date|due|when/.test(request.instruction.toLowerCase());
+    const goal = request.instruction.toLowerCase();
+    const asksForDate = /date|due|when/.test(goal);
     if (asksForDate && !target.fields.some((field) => field.id === "due_date")) {
       target.fields.push({ id: "due_date", label: "Due date", type: "date" });
       previous.screens.filter((screen) => screen.collection === target.id && screen.view !== "form").forEach((screen) => { screen.fields = [...(screen.fields ?? target.fields.slice(0, -1).map((field) => field.id)), "due_date"]; });
+    }
+    if (/reviewed|review checkbox/.test(goal) && !target.fields.some((field) => field.id === "reviewed")) target.fields.push({ id: "reviewed", label: "Reviewed", type: "boolean", required: true, default: false });
+    if (/estimated minutes|time estimate/.test(goal) && !target.fields.some((field) => field.id === "estimated_minutes")) target.fields.push({ id: "estimated_minutes", label: "Estimated minutes", type: "number", min: 0, max: 1000, default: 20 });
+    if (/priority.*free text|free text.*priority/.test(goal)) {
+      target.fields = target.fields.map((field) => field.id === "priority" ? { id: "priority", label: field.label, type: "text" as const } : field);
+      target.seed = (target.seed ?? []).map((row) => { const rest = { ...row }; delete rest.priority; return rest; });
     }
     previous.summary = `Updated to focus on: ${request.instruction.slice(0, 120)}`;
     previous.changeSummary = diffArtifacts(request.previous, previous);

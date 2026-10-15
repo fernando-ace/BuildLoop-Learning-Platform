@@ -1,7 +1,9 @@
+import { describeSchemaChanges, diffApplicationSchemas } from "./schema-diff";
+
 export type V2Field =
-  | { id: string; label: string; type: "text" | "longText" | "number" | "boolean" | "date"; required?: boolean; minLength?: number; maxLength?: number; min?: number; max?: number }
-  | { id: string; label: string; type: "select" | "status"; options: string[]; required?: boolean }
-  | { id: string; label: string; type: "reference"; collection: string; required?: boolean };
+  | { id: string; label: string; type: "text" | "longText" | "number" | "boolean" | "date"; required?: boolean; default?: string | number | boolean; minLength?: number; maxLength?: number; min?: number; max?: number }
+  | { id: string; label: string; type: "select" | "status"; options: string[]; required?: boolean; default?: string }
+  | { id: string; label: string; type: "reference"; collection: string; required?: boolean; default?: string };
 
 export type V2Action =
   | { id: string; label: string; type: "navigate"; screen: string }
@@ -60,10 +62,20 @@ export function validateArtifactV2(value: unknown, maxBytes = 48_000): { ok: tru
       if (typeof f.id !== "string" || !ID.test(f.id) || f.id === "id" || fieldIds.has(f.id)) issues.push(`Collection ${i + 1} has an invalid or duplicate field id`);
       if (typeof f.id === "string") fieldIds.add(f.id);
       if (!SAFE(f.label, 80) || !["text", "longText", "number", "boolean", "date", "select", "status", "reference"].includes(String(f.type))) issues.push(`Field ${String(f.id)} is invalid`);
-      const common = ["id", "label", "type", "required"];
+      const common = ["id", "label", "type", "required", "default"];
       const allowed = f.type === "text" || f.type === "longText" ? [...common, "minLength", "maxLength"] : f.type === "number" ? [...common, "min", "max"] : f.type === "select" || f.type === "status" ? [...common, "options"] : f.type === "reference" ? [...common, "collection"] : common;
       if (!keysOnly(f, allowed)) issues.push(`Field ${String(f.id)} has properties that do not match its type`);
       if (f.required !== undefined && typeof f.required !== "boolean") issues.push("Field required flag must be boolean");
+      if (f.default !== undefined) {
+        const d = f.default;
+        const validDefault = f.type === "number" ? typeof d === "number" && Number.isFinite(d) && (typeof f.min !== "number" || d >= f.min) && (typeof f.max !== "number" || d <= f.max)
+          : f.type === "boolean" ? typeof d === "boolean"
+            : typeof d === "string" && d.trim().length > 0 && (f.type === "select" || f.type === "status" ? Array.isArray(f.options) && f.options.includes(d)
+              : f.type === "reference" ? ID.test(d)
+                : f.type === "date" ? /^\d{4}-\d{2}-\d{2}$/.test(d) && Number.isFinite(Date.parse(`${d}T00:00:00Z`)) && new Date(`${d}T00:00:00Z`).toISOString().slice(0, 10) === d
+                  : (typeof f.minLength !== "number" || d.length >= f.minLength) && (typeof f.maxLength !== "number" || d.length <= f.maxLength));
+        if (!validDefault) issues.push(`Field ${String(f.id)} has a default that does not match its type or rules`);
+      }
       if (f.type === "select" || f.type === "status") if (!Array.isArray(f.options) || f.options.length < 1 || f.options.length > 12 || !f.options.every((x) => SAFE(x, 40))) issues.push(`Field ${String(f.id)} has invalid choices`);
       if (f.type === "reference" && (typeof f.collection !== "string" || !ID.test(f.collection))) issues.push(`Field ${String(f.id)} has invalid collection reference`);
       if (f.type === "number" && ((f.min !== undefined && typeof f.min !== "number") || (f.max !== undefined && typeof f.max !== "number") || (typeof f.min === "number" && typeof f.max === "number" && f.min > f.max))) issues.push(`Field ${String(f.id)} has invalid number bounds`);
@@ -76,7 +88,7 @@ export function validateArtifactV2(value: unknown, maxBytes = 48_000): { ok: tru
         if (!record(item) || Object.keys(item).length > 17 || Object.keys(item).some((k) => (k !== "id" && !fieldIds.has(k)) || ["__proto__", "constructor", "prototype"].includes(k))) { issues.push(`Collection ${i + 1} has invalid seed data`); continue; }
         if (item.id !== undefined && (typeof item.id !== "string" || !ID.test(item.id))) issues.push(`Collection ${i + 1} has an invalid record id`);
         for (const f of Array.isArray(raw.fields) ? raw.fields.filter(record) : []) {
-          const val = item[String(f.id)]; if (val === undefined) { if (f.required) issues.push(`Seed record is missing ${String(f.id)}`); continue; }
+          const val = item[String(f.id)] === undefined ? f.default : item[String(f.id)]; if (val === undefined) { if (f.required) issues.push(`Seed record is missing ${String(f.id)}`); continue; }
           if (f.required && val === "") issues.push(`Seed record is missing ${String(f.id)}`);
           if ((f.type === "text" || f.type === "longText" || f.type === "date" || f.type === "select" || f.type === "status" || f.type === "reference") && typeof val !== "string") issues.push(`Seed value for ${String(f.id)} must be text`);
           if ((f.type === "text" || f.type === "longText") && typeof val === "string" && ((typeof f.minLength === "number" && val.length < f.minLength) || (typeof f.maxLength === "number" && val.length > f.maxLength))) issues.push(`Seed value for ${String(f.id)} is outside its length bounds`);
@@ -99,6 +111,7 @@ export function validateArtifactV2(value: unknown, maxBytes = 48_000): { ok: tru
     for (const row of Array.isArray(collection.seed) ? collection.seed.filter(record) : []) if (typeof row.id === "string") { if (ids.has(row.id)) issues.push(`Collection ${String(collection.id)} has duplicate record IDs`); ids.add(row.id); }
     seedIds.set(String(collection.id), ids);
   }
+  for (const collection of collections.filter(record)) for (const field of Array.isArray(collection.fields) ? collection.fields.filter(record) : []) if (field.type === "reference" && field.default !== undefined && !seedIds.get(String(field.collection))?.has(String(field.default))) issues.push(`Reference default for ${String(field.id)} points to a missing sample record`);
   for (const collection of collections.filter(record)) for (const row of Array.isArray(collection.seed) ? collection.seed.filter(record) : []) for (const field of Array.isArray(collection.fields) ? collection.fields.filter(record) : []) if (field.type === "reference" && row[String(field.id)] !== undefined && !(seedIds.get(String(field.collection))?.has(String(row[String(field.id)])))) issues.push(`Seed reference ${String(field.id)} points to a missing record`);
   const screenIds = new Set<string>();
   for (const [i, raw] of screens.entries()) {
@@ -178,7 +191,7 @@ export function validateArtifactV2(value: unknown, maxBytes = 48_000): { ok: tru
 }
 
 export function seedRuntimeData(artifact: GeneratedAppV2): RuntimeData {
-  return Object.fromEntries(artifact.collections.map((c) => [c.id, (c.seed ?? []).map((row, i) => ({ id: typeof row.id === "string" ? row.id : `${c.id.slice(0, 20)}_${i + 1}`, ...row }))]));
+  return Object.fromEntries(artifact.collections.map((c) => [c.id, (c.seed ?? []).map((row, i) => ({ id: typeof row.id === "string" ? row.id : `${c.id.slice(0, 20)}_${i + 1}`, ...Object.fromEntries(c.fields.filter((field) => field.default !== undefined && row[field.id] === undefined).map((field) => [field.id, field.default])), ...row }))]));
 }
 export function applyRuntimeAction(data: RuntimeData, action: V2Action, recordId?: string, artifact?: GeneratedAppV2): RuntimeData {
   const rows = data[action.type === "navigate" ? "" : action.collection] ?? [];
@@ -199,34 +212,7 @@ export function deriveMetric(data: RuntimeData, metric: GeneratedAppV2["metrics"
   return rows.length;
 }
 export function diffArtifacts(before: GeneratedAppV2, after: GeneratedAppV2): string[] {
-  const changes: string[] = [];
-  const keyed = <T extends { id: string }>(oldItems: T[], newItems: T[], label: string, describe?: (oldItem: T, newItem: T) => void) => {
-    const old = new Map(oldItems.map((item) => [item.id, item])); const fresh = new Map(newItems.map((item) => [item.id, item]));
-    for (const id of fresh.keys()) if (!old.has(id)) changes.push(`Added ${label} ${id}`);
-    for (const id of old.keys()) if (!fresh.has(id)) changes.push(`Removed ${label} ${id}`);
-    if (describe) for (const [id, item] of old) { const next = fresh.get(id); if (next) describe(item, next); }
-    else for (const [id, item] of old) { const next = fresh.get(id); if (next && JSON.stringify(item) !== JSON.stringify(next)) changes.push(`Changed ${label} ${id}`); }
-  };
-  if (before.title !== after.title) changes.push("Changed app title");
-  if (before.summary !== after.summary) changes.push("Changed app summary");
-  keyed(before.screens, after.screens, "screen", (old, next) => {
-    if (old.title !== next.title) changes.push(`Renamed screen ${old.id}`);
-    if (old.view !== next.view || old.collection !== next.collection || old.primaryField !== next.primaryField || JSON.stringify(old.fields) !== JSON.stringify(next.fields)) changes.push(`Changed record view ${old.id}`);
-    if (JSON.stringify(old.filters) !== JSON.stringify(next.filters) || old.search !== next.search) changes.push(`Changed filters or search on ${old.id}`);
-    if (JSON.stringify(old.sort) !== JSON.stringify(next.sort)) changes.push(`Changed sorting on ${old.id}`);
-    if (old.emptyText !== next.emptyText) changes.push(`Changed empty state on ${old.id}`);
-  });
-  keyed(before.collections, after.collections, "collection", (old, next) => {
-    if (old.label !== next.label) changes.push(`Changed collection ${old.id}`);
-    const oldFields = old.fields, nextFields = next.fields;
-    keyed(oldFields, nextFields, "field", (left, right) => {
-      if (JSON.stringify(left) !== JSON.stringify(right)) changes.push(`Changed validation or type for ${old.id}.${left.id}`);
-    });
-    if (JSON.stringify(old.seed ?? []) !== JSON.stringify(next.seed ?? [])) changes.push(`Changed seed data for ${old.id}`);
-  });
-  keyed(before.actions, after.actions, "action"); keyed(before.metrics, after.metrics, "derived value");
-  if (JSON.stringify(before.navigation) !== JSON.stringify(after.navigation) || before.defaultScreen !== after.defaultScreen) changes.push("Changed navigation");
-  return changes.length ? changes.slice(0, 12) : ["Kept existing screens and behaviors"];
+  return describeSchemaChanges(diffApplicationSchemas(before, after)).slice(0, 12);
 }
 
 const fixture = (title: string, collection: V2Collection, screens: V2Screen[], metrics: GeneratedAppV2["metrics"] = []): GeneratedAppV2 => ({
