@@ -24,6 +24,31 @@ async function checkStudioWidths(page: Page, phase: string, widths = [390, 430, 
   await page.setViewportSize({ width: 1440, height: 950 });
 }
 
+async function buildNextFromTry(page: Page, version: number, goal: string) {
+  await page.getByLabel("What did you do?").fill("Opened the topic list");
+  await page.getByLabel("What did you expect?").fill("See the saved topics");
+  await page.getByLabel("What happened instead?").fill("The topics appeared");
+  await page.getByRole("button", { name: "Record test and gather feedback" }).click();
+  await page.getByLabel("Who shared feedback?").fill("Me");
+  await page.getByLabel("What did they notice or say?").fill("I need one more detail for this task");
+  await page.getByRole("button", { name: "Choose what to work on next" }).click();
+  await page.getByLabel("What should change next?").fill(goal);
+  await page.getByRole("button", { name: `Build Version ${version}` }).click();
+  await expect(page.getByRole("heading", { name: "Try it again, then check nearby behavior." })).toBeVisible();
+}
+
+async function buildNextFromRetest(page: Page, version: number, goal: string) {
+  await page.getByLabel("Repeat: what did you do?").fill("Opened the topic list");
+  await page.getByLabel("What did you expect this time?").fill("See the saved topics and new detail");
+  await page.getByLabel("What happened?").fill("The saved topics and new detail appeared");
+  await page.getByLabel("Check one nearby behavior").fill("The existing list remained usable");
+  await page.getByRole("button", { name: "See your project summary" }).click();
+  await page.getByRole("button", { name: "Build another version" }).click();
+  await page.getByLabel("What should change next?").fill(goal);
+  await page.getByRole("button", { name: `Build Version ${version}` }).click();
+  await expect(page.getByRole("heading", { name: "Try it again, then check nearby behavior." })).toBeVisible();
+}
+
 test("Studio supports build, try, feedback, iteration, retest, summary, and refresh", async ({ page }) => {
   test.setTimeout(90_000);
   const errors: string[] = [];
@@ -91,11 +116,12 @@ test("Studio supports build, try, feedback, iteration, retest, summary, and refr
   await page.getByRole("button", { name: "Build Version 2" }).click();
   await expect(page.getByText("VERSION 2 · BUILDER CHANGE SUMMARY")).toBeVisible();
   const v2preview = page.frameLocator('iframe[title="Topic Tracker interactive preview"]');
+  await expect(page.getByText("2 records carried forward")).toBeVisible();
   await v2preview.getByRole("button", { name: "Add record" }).click();
   await expect(v2preview.getByLabel("Due date")).toBeVisible();
   await v2preview.getByRole("button", { name: "Cancel" }).click();
   await expect(v2preview.getByText("Plan kickoff")).toBeVisible();
-  await expect(v2preview.getByText("Biology exam")).toHaveCount(0);
+  await expect(v2preview.getByText("Biology exam")).toBeVisible();
   await checkStudioWidths(page, "Version 2 retest");
   await page.reload();
   await expect(page.getByText("VERSION 2 · BUILDER CHANGE SUMMARY")).toBeVisible();
@@ -121,6 +147,94 @@ test("Studio supports build, try, feedback, iteration, retest, summary, and refr
     expect(size[0], `horizontal overflow at ${width}px`).toBeLessThanOrEqual(size[1]);
   }
   expect(errors).toEqual([]);
+});
+
+test("four Studio versions carry real data forward while preserving historical snapshots", async ({ page }) => {
+  test.setTimeout(120_000);
+  await startProject(page);
+  await page.getByRole("button", { name: "Choose a small first version" }).click();
+  await page.getByLabel("Feature idea").fill("Track study topics and upcoming reviews");
+  await page.getByRole("button", { name: "Add idea" }).click();
+  await page.getByRole("button", { name: "Write the Builder Brief" }).click();
+  await page.getByLabel("Your Builder instruction").fill("Build a study topic tracker for students who need to organize review work.");
+  await page.getByRole("button", { name: "Build Version 1" }).click();
+
+  const v1 = page.frameLocator('iframe[title="Topic Tracker interactive preview"]');
+  for (const title of ["Biology review", "History final"]) {
+    await v1.getByRole("button", { name: "Add record" }).click();
+    await v1.getByLabel("Task").fill(title);
+    await v1.getByRole("button", { name: "Create record" }).click();
+    await expect(v1.getByText(title)).toBeVisible();
+  }
+
+  await buildNextFromTry(page, 2, "Add a due date to every study topic");
+  const v2 = page.frameLocator('iframe[title="Topic Tracker interactive preview"]');
+  await expect(page.getByText("3 records carried forward")).toBeVisible();
+  await expect(v2.getByText("Biology review")).toBeVisible();
+  await expect(v2.getByText("History final")).toBeVisible();
+
+  await buildNextFromRetest(page, 3, "Add a required review checkbox with a safe default");
+  const v3 = page.frameLocator('iframe[title="Topic Tracker interactive preview"]');
+  await v3.getByRole("button", { name: "Add record" }).click();
+  await expect(v3.getByLabel("Reviewed")).toHaveValue("false");
+  await v3.getByLabel("Task").fill("Geology review");
+  await v3.getByRole("button", { name: "Create record" }).click();
+  await expect(v3.getByText("Geology review")).toBeVisible();
+  const versionThreeRows = await page.evaluate(() => {
+    const state = JSON.parse(localStorage.getItem("buildloop-studio-v1") || "{}");
+    const project = state.projects?.find((item: { id: string }) => item.id === state.activeId);
+    const snapshot = JSON.parse(localStorage.getItem(`buildloop-runtime-v2:${encodeURIComponent(project.id)}:3`) || "null");
+    return snapshot?.data?.tasks?.length;
+  });
+  expect(versionThreeRows).toBe(4);
+
+  await buildNextFromRetest(page, 4, "Add an estimated minutes field with a sensible default");
+  const v4 = page.frameLocator('iframe[title="Topic Tracker interactive preview"]');
+  await expect(page.getByText("4 records carried forward")).toBeVisible();
+  await expect(v4.getByText("Biology review")).toBeVisible();
+  await expect(v4.getByText("History final")).toBeVisible();
+  await expect(v4.getByText("Geology review")).toBeVisible();
+  await page.getByLabel("Repeat: what did you do?").fill("Opened the topic list");
+  await page.getByLabel("What did you expect this time?").fill("See each topic with its review details");
+  await page.getByLabel("What happened?").fill("The topic list showed the saved records");
+  await page.getByLabel("Check one nearby behavior").fill("Search still finds saved topics");
+  await page.getByRole("button", { name: "See your project summary" }).click();
+  await expect(page.getByText("Compare Version 3 with Version 4")).toBeVisible();
+  await checkStudioWidths(page, "four-version history", [390, 1440]);
+
+  await page.getByRole("button", { name: "Preview Version 1" }).click();
+  const historicalV1 = page.frameLocator('iframe[title="Topic Tracker interactive preview"]').last();
+  await expect(historicalV1.getByText("Biology review")).toBeVisible();
+  await expect(historicalV1.getByText("History final")).toBeVisible();
+  await expect(historicalV1.getByText("Geology review")).toHaveCount(0);
+  await page.getByRole("button", { name: "Close older preview" }).click();
+  await page.getByRole("button", { name: "Preview Version 2" }).click();
+  const historicalV2 = page.frameLocator('iframe[title="Topic Tracker interactive preview"]').last();
+  await expect(historicalV2.getByText("Due date: —").first()).toBeVisible();
+  await expect(historicalV2.getByText("Geology review")).toHaveCount(0);
+});
+
+test("Studio warns before incompatible populated fields are reset and keeps the old version intact", async ({ page }) => {
+  await startProject(page);
+  await page.getByRole("button", { name: "Choose a small first version" }).click();
+  await page.getByLabel("Feature idea").fill("Track study tasks and their priority");
+  await page.getByRole("button", { name: "Add idea" }).click();
+  await page.getByRole("button", { name: "Write the Builder Brief" }).click();
+  await page.getByLabel("Your Builder instruction").fill("Build a study topic tracker for students.");
+  await page.getByRole("button", { name: "Build Version 1" }).click();
+  await buildNextFromTry(page, 2, "Change priority from a choice to a free text field");
+  await expect(page.getByText("Priority changed to an incompatible format")).toBeVisible();
+  await expect(page.getByText(/old values remain in Version 1/)).toBeVisible();
+  const current = page.frameLocator('iframe[title="Topic Tracker interactive preview"]');
+  await expect(current.getByText("Plan kickoff")).toBeVisible();
+  await page.getByLabel("Repeat: what did you do?").fill("Opened the tracker");
+  await page.getByLabel("What did you expect this time?").fill("See the existing priority values");
+  await page.getByLabel("What happened?").fill("The item stayed; its priority needs a new value");
+  await page.getByLabel("Check one nearby behavior").fill("The existing task can still be edited");
+  await page.getByRole("button", { name: "See your project summary" }).click();
+  await page.getByRole("button", { name: "Preview Version 1" }).click();
+  const historical = page.frameLocator('iframe[title="Topic Tracker interactive preview"]').last();
+  await expect(historical.getByText("Priority: High")).toBeVisible();
 });
 
 test("V2 equipment table supports navigation, detail, forms, filtering, and reset at mobile widths", async ({ page }) => {
@@ -210,6 +324,39 @@ test("saved V1 artifacts still open in their original interactive preview", asyn
   await preview.getByRole("textbox", { name: "Book title" }).fill("The Left Hand of Darkness");
   await preview.getByRole("button", { name: "Add book" }).click();
   await expect(preview.getByText("The Left Hand of Darkness")).toBeVisible();
+});
+
+test("legacy V2 runtime maps reopen and upgrade to version snapshot envelopes", async ({ page }) => {
+  await page.goto("/");
+  const artifact = {
+    format: "buildloop-app-v2", title: "Legacy task list", summary: "Saved by an earlier Studio version.", defaultScreen: "tasks",
+    screens: [
+      { id: "tasks", title: "Tasks", view: "list", collection: "tasks", primaryField: "title", fields: ["title"] },
+      { id: "new_task", title: "New task", view: "form", collection: "tasks", formMode: "create", cancelScreen: "tasks" },
+    ],
+    navigation: [{ label: "Tasks", screen: "tasks" }],
+    collections: [{ id: "tasks", label: "Tasks", fields: [{ id: "title", label: "Task", type: "text", required: true }], seed: [{ id: "task_seed", title: "Sample task" }] }],
+    actions: [], metrics: [], changeSummary: [], testTasks: ["Add a task"],
+  };
+  const project = {
+    id: "legacy-v2-project", name: "Legacy task list", user: "Students", problem: "Remember tasks", why: "Keep track", stage: "try",
+    features: [{ id: "task-list", text: "Track tasks", inV1: true }], behavior: "Students can add tasks", constraints: "", instruction: "Keep a task list", brief: null,
+    versions: [{ number: 1, instruction: "Build a task list", builtAt: "2026-10-15T00:00:00.000Z", status: "complete", notes: "", tested: false, result: { provider: "deterministic", title: artifact.title, description: artifact.summary, instruction: "Build a task list", artifact } }],
+    observations: [], feedback: [], nextGoal: "", shareDecision: "", createdAt: "2026-10-15T00:00:00.000Z", updatedAt: "2026-10-15T00:00:00.000Z",
+  };
+  await page.evaluate((savedProject) => {
+    localStorage.setItem("buildloop-studio-v1", JSON.stringify({ projects: [savedProject], activeId: savedProject.id, screen: "project" }));
+    localStorage.setItem("buildloop-runtime-v2:legacy-v2-project:1", JSON.stringify({ tasks: [{ id: "task_saved", title: "Saved from older V2" }] }));
+  }, project);
+  await page.reload();
+  const preview = page.frameLocator('iframe[title="Legacy task list interactive preview"]');
+  await expect(preview.getByText("Saved from older V2")).toBeVisible();
+  await preview.getByRole("button", { name: "Add record" }).click();
+  await preview.getByLabel("Task").fill("Newer task");
+  await preview.getByRole("button", { name: "Create record" }).click();
+  await expect(preview.getByText("Newer task")).toBeVisible();
+  const snapshot = await page.evaluate(() => JSON.parse(localStorage.getItem("buildloop-runtime-v2:legacy-v2-project:1") || "null"));
+  expect(snapshot).toMatchObject({ format: "buildloop-runtime-snapshot-v1", projectId: "legacy-v2-project", version: 1, data: { tasks: [{ id: "task_saved", title: "Saved from older V2" }, { title: "Newer task" }] } });
 });
 
 test("Studio can create three immutable versions and reopen an older preview", async ({ page }) => {
