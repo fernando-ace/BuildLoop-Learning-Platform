@@ -29,6 +29,9 @@ import { MissionFourPlayer } from "@/app/components/mission-four-player";
 import { MissionFivePlayer } from "@/app/components/mission-five-player";
 import { mission5Definition, type Mission5Progress, type Mission5State } from "@/lib/missions/something-broken";
 import { getMission5Progress, getMission5State, getServerMission5Progress, getServerMission5State, startMission5 } from "@/lib/store";
+import { MissionSixPlayer } from "@/app/components/mission-six-player";
+import { mission6Definition, type Mission6Progress, type Mission6State } from "@/lib/missions/build-it-for-real";
+import { getMission6Progress, getMission6State, getServerMission6Progress, getServerMission6State, startMission6 } from "@/lib/store";
 
 const subscribeToHydration = () => () => {};
 const clientReadySnapshot = () => true;
@@ -44,7 +47,7 @@ function RestoreMission({ state, onReset }: { state: MissionState; onReset: () =
   );
 }
 
-function MissionHub({ state, progress, mission2State, mission2Progress, mission3State, mission3Progress, mission4State, mission4Progress, mission5State, mission5Progress, onStart, onStart2, onStart3, onStart4, onStart5 }: { state: MissionState; progress: LearnerProgress; mission2State: Mission2State; mission2Progress: Mission2Progress; mission3State: Mission3State; mission3Progress: Mission3Progress; mission4State: Mission4State; mission4Progress: Mission4Progress; mission5State: Mission5State; mission5Progress: Mission5Progress; onStart: () => void; onStart2: () => void; onStart3: () => void; onStart4: () => void; onStart5: () => void }) {
+function MissionHub({ state, progress, mission2State, mission2Progress, mission3State, mission3Progress, mission4State, mission4Progress, mission5State, mission5Progress, mission6State, mission6Progress, onStart, onStart2, onStart3, onStart4, onStart5, onStart6 }: { state: MissionState; progress: LearnerProgress; mission2State: Mission2State; mission2Progress: Mission2Progress; mission3State: Mission3State; mission3Progress: Mission3Progress; mission4State: Mission4State; mission4Progress: Mission4Progress; mission5State: Mission5State; mission5Progress: Mission5Progress; mission6State: Mission6State; mission6Progress: Mission6Progress; onStart: () => void; onStart2: () => void; onStart3: () => void; onStart4: () => void; onStart5: () => void; onStart6: () => void }) {
   const isInProgress = state.stage > 0 && !state.shipped;
   const mission2InProgress = mission2State.stage > 0 && mission2State.stage < 10;
   const mission2Unlocked = progress.completed;
@@ -54,15 +57,17 @@ function MissionHub({ state, progress, mission2State, mission2Progress, mission3
   const mission4Unlocked = mission3Progress.completed;
   const mission5InProgress = mission5State.stage > 0 && mission5State.stage < 8;
   const mission5Unlocked = mission4Progress.completed;
-  const completedCount = Number(progress.completed) + Number(mission2Progress.completed) + Number(mission3Progress.completed) + Number(mission4Progress.completed) + Number(mission5Progress.completed);
+  const mission6InProgress = mission6State.stage > 0 && mission6State.stage < 11;
+  const mission6Unlocked = mission5Progress.completed;
+  const completedCount = Number(progress.completed) + Number(mission2Progress.completed) + Number(mission3Progress.completed) + Number(mission4Progress.completed) + Number(mission5Progress.completed) + Number(mission6Progress.completed);
   const status = isInProgress ? "In progress" : progress.completed ? "Completed" : "Not started";
-  const latestResults = mission5Progress.completed ? mission5Progress.latestSkillResults : mission4Progress.completed ? mission4Progress.latestSkillResults : mission3Progress.completed ? mission3Progress.latestSkillResults : mission2Progress.completed ? mission2Progress.latestSkillResults : progress.latestSkillResults;
+  const latestResults = mission6Progress.completed ? mission6Progress.latestSkillResults : mission5Progress.completed ? mission5Progress.latestSkillResults : mission4Progress.completed ? mission4Progress.latestSkillResults : mission3Progress.completed ? mission3Progress.latestSkillResults : mission2Progress.completed ? mission2Progress.latestSkillResults : progress.latestSkillResults;
   const latest = new Map(latestResults.map((skill) => [skill.name, skill]));
   return <div className="hub-shell">
     <header className="hub-topbar"><div className="brand">build<span>loop</span><i /></div><span className="hub-local">Your progress is saved on this device</span></header>
     <main className="hub-main">
       <section className="hub-intro"><p className="eyebrow">YOUR MISSION HUB</p><h1>Learn to build real things with AI.</h1><p>Make decisions, see what happens, and practice taking an idea all the way to a working product.</p></section>
-      <section className="learner-progress" aria-label="Learner progress"><div><span className="eyebrow">YOUR PROGRESS</span><strong>{completedCount ? `${completedCount} of 5 missions complete` : isInProgress ? "Mission 1 in progress" : "Your learning journey starts here"}</strong></div><span>{progress.attempts + mission2Progress.attempts.length + mission3Progress.attempts.length + mission4Progress.attempts.length + mission5Progress.attempts.length} {progress.attempts + mission2Progress.attempts.length + mission3Progress.attempts.length + mission4Progress.attempts.length + mission5Progress.attempts.length === 1 ? "attempt" : "attempts"}</span><div className="hub-progress-track" aria-label={`${Math.round(completedCount / 5 * 100)}% mission progress`}><span style={{ width: `${completedCount / 5 * 100}%` }} /></div></section>
+      <section className="learner-progress" aria-label="Learner progress"><div><span className="eyebrow">YOUR PROGRESS</span><strong>{completedCount === 6 ? "All six missions complete" : completedCount ? `${completedCount} of 6 missions complete` : isInProgress ? "Mission 1 in progress" : "Your learning journey starts here"}</strong></div><span>{progress.attempts + mission2Progress.attempts.length + mission3Progress.attempts.length + mission4Progress.attempts.length + mission5Progress.attempts.length + mission6Progress.attempts.length} {progress.attempts + mission2Progress.attempts.length + mission3Progress.attempts.length + mission4Progress.attempts.length + mission5Progress.attempts.length + mission6Progress.attempts.length === 1 ? "attempt" : "attempts"}</span><div className="hub-progress-track" aria-label={`${Math.round(completedCount / 6 * 100)}% mission progress`}><span style={{ width: `${completedCount / 6 * 100}%` }} /></div></section>
       <section className="mission-cards" aria-label="Missions">
         <article className="hub-mission-card">
           <div className="hub-card-top"><span className="mission-number">MISSION {mission1Definition.metadata.number}</span><span className={`mission-status ${isInProgress ? "is-progress" : progress.completed ? "is-completed" : ""}`}>{status}</span></div>
@@ -94,7 +99,14 @@ function MissionHub({ state, progress, mission2State, mission2Progress, mission3
           {mission5Unlocked && <div className="hub-skills"><span className="eyebrow">YOU’LL PRACTICE</span><div>{mission5Definition.skills.map((skill) => <span key={skill}>{skill}</span>)}</div></div>}
           <div className="hub-card-footer"><span>{mission5Unlocked ? `About ${mission5Definition.metadata.estimatedMinutes} minutes · No coding needed` : "Available after Mission 4"}</span>{mission5Unlocked && <button className="button button-primary" onClick={onStart5} type="button">{mission5InProgress ? "Continue Mission" : mission5Progress.completed ? "Replay Mission" : "Start Mission"}<span aria-hidden="true">→</span></button>}</div>
         </article>
+        <article className={`hub-mission-card hub-mission-two m6-hub-card${mission6Unlocked ? "" : " is-locked"}`} aria-label={mission6Unlocked ? "Mission 6" : "Mission 6 locked"}>
+          <div className="hub-card-top"><span className="mission-number">MISSION {mission6Definition.number} · FINAL PROJECT</span><span className={`mission-status ${mission6InProgress ? "is-progress" : mission6Progress.completed ? "is-completed" : ""}`}>{mission6Unlocked ? mission6InProgress ? "In progress" : mission6Progress.completed ? "Completed" : "Ready" : "Locked"}</span></div>
+          <h2>{mission6Unlocked ? mission6Definition.title : "Your full project is ahead"}</h2><p className="mission-description">{mission6Unlocked ? mission6Definition.description : "Complete Mission 5 to bring the whole BuildLoop process together."}</p>
+          {mission6Unlocked && <div className="hub-skills"><span className="eyebrow">PUT IT ALL TOGETHER</span><div>{["Learn what people need", "Build a useful first version", "Test, improve, and decide"].map((skill) => <span key={skill}>{skill}</span>)}</div></div>}
+          <div className="hub-card-footer"><span>{mission6Unlocked ? `About ${mission6Definition.estimatedMinutes} minutes · No coding needed` : "Available after Mission 5"}</span>{mission6Unlocked && <button className="button button-primary" onClick={onStart6} type="button">{mission6InProgress ? "Continue Mission" : mission6Progress.completed ? "Replay Mission" : "Start Mission"}<span aria-hidden="true">→</span></button>}</div>
+        </article>
       </section>
+      {completedCount === 6 && <section className="m6-hub-finish"><span className="eyebrow">COURSE COMPLETE</span><h2>You took an idea all the way through.</h2><p>You can replay any mission to practice a skill again. Mission 6 brings them together in one product project.</p></section>}
       <section className="skill-progress"><div className="skill-heading"><div><span className="eyebrow">SKILLS YOU’RE BUILDING</span><h2>Small steps add up.</h2></div>{progress.completed && <span className="skill-note">Based on your latest attempt</span>}</div><div className="skill-list">{learnerSkills.map((name) => {
         const score = latest.get(name)?.score;
         return <div className="hub-skill" key={name}><div><strong>{name}</strong><span>{score === undefined ? "Not practiced yet" : skillLabel(score)}</span></div><div className="skill-track"><span style={{ width: `${score ?? 0}%` }} /></div></div>;
@@ -333,13 +345,18 @@ export default function MissionPage() {
   const mission4Progress = useSyncExternalStore(subscribeMission, getMission4Progress, getServerMission4Progress);
   const mission5State = useSyncExternalStore(subscribeMission, getMission5State, getServerMission5State);
   const mission5Progress = useSyncExternalStore(subscribeMission, getMission5Progress, getServerMission5Progress);
+  const mission6State = useSyncExternalStore(subscribeMission, getMission6State, getServerMission6State);
+  const mission6Progress = useSyncExternalStore(subscribeMission, getMission6Progress, getServerMission6Progress);
   const activeMission = useSyncExternalStore(subscribeMission, getActiveMission, () => 1);
   const dispatch = dispatchMission;
+  const courseScoreSets = [learnerProgress.bestSkillResults, mission2Progress.bestSkillResults, mission3Progress.bestSkillResults, mission4Progress.bestSkillResults, mission5Progress.bestSkillResults, mission6Progress.bestSkillResults];
+  const courseSkills = learnerSkills.map((name) => ({ name, score: Math.max(0, ...courseScoreSets.flat().filter((item) => item.name === name).map((item) => item.score)) }));
+  if (activeMission === 6 && mission6State.stage > 0) return <div data-hydrated={hydrated}><MissionSixPlayer state={mission6State} progress={mission6Progress} courseSkills={courseSkills} /></div>;
   if (activeMission === 5 && mission5State.stage > 0) return <div data-hydrated={hydrated}><MissionFivePlayer state={mission5State} progress={mission5Progress} /></div>;
   if (activeMission === 4 && mission4State.stage > 0) return <div data-hydrated={hydrated}><MissionFourPlayer state={mission4State} progress={mission4Progress} /></div>;
   if (activeMission === 3 && mission3State.stage > 0) return <div data-hydrated={hydrated}><MissionThreePlayer state={mission3State} progress={mission3Progress} /></div>;
   if (activeMission === 2 && mission2State.stage > 0) return <div data-hydrated={hydrated}><MissionTwoPlayer state={mission2State} progress={mission2Progress} attemptCount={mission2Progress.attempts.length + 1} /></div>;
-  if (activeMission === 0 || state.stage === 0) return <div data-hydrated={hydrated}><MissionHub state={state} progress={learnerProgress} mission2State={mission2State} mission2Progress={mission2Progress} mission3State={mission3State} mission3Progress={mission3Progress} mission4State={mission4State} mission4Progress={mission4Progress} mission5State={mission5State} mission5Progress={mission5Progress} onStart={() => dispatch({ type: "START" })} onStart2={startMission2} onStart3={startMission3} onStart4={startMission4} onStart5={startMission5} /></div>;
+  if (activeMission === 0 || state.stage === 0) return <div data-hydrated={hydrated}><MissionHub state={state} progress={learnerProgress} mission2State={mission2State} mission2Progress={mission2Progress} mission3State={mission3State} mission3Progress={mission3Progress} mission4State={mission4State} mission4Progress={mission4Progress} mission5State={mission5State} mission5Progress={mission5Progress} mission6State={mission6State} mission6Progress={mission6Progress} onStart={() => dispatch({ type: "START" })} onStart2={startMission2} onStart3={startMission3} onStart4={startMission4} onStart5={startMission5} onStart6={startMission6} /></div>;
   let stageView: ReactNode;
   switch (state.stage) {
     case 1: stageView = <Discovery state={state} dispatch={dispatch} />; break;
