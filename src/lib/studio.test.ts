@@ -28,6 +28,8 @@ describe("BuildLoop Studio project workflow", () => {
     project = recordFeedback(project, { from: "Sam, a student", note: "I wanted to see the due date" });
     project = recordNextGoal(project, "Students can see when each topic is due");
     expect(project.versions[0].tested).toBe(true);
+    expect(project.versions[0].observations).toEqual(["Open the topic list: The list is empty"]);
+    expect(project.versions[0].feedback).toEqual(["Sam, a student: I wanted to see the due date"]);
     expect(project.observations[0].version).toBe(1);
     expect(project.feedback[0].version).toBe(1);
     expect(project.stage).toBe("retest");
