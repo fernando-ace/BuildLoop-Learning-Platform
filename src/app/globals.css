@@ -804,3 +804,100 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, summary:focus
   .m4-decision-options { grid-template-columns: 1fr; }
   .m4-context-row { flex-direction: column; gap: 4px; }
 }
+
+/* Mission 5: an app preview that reads clearly as ClubBoard inside the lesson. */
+.m5-shell .m2-main { max-width: 900px; }
+.m5-topbar { min-height: 104px; align-content: center; row-gap: 10px; }
+.m5-progress { display: flex; width: min(100%, 660px); grid-column: 1 / -1; justify-self: center; gap: 6px; }
+.m5-progress > span { display: flex; min-width: 0; flex: 1; align-items: center; gap: 5px; color: #8994a2; }
+.m5-progress i { display: grid; width: 19px; height: 19px; flex: 0 0 19px; place-items: center; border: 1px solid #dce3eb; border-radius: 50%; background: #fff; color: #78869a; font-size: 8px; font-style: normal; }
+.m5-progress small { overflow: hidden; font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
+.m5-progress .is-current { color: #486994; font-weight: 700; }
+.m5-progress .is-current i { border-color: #9ab0d0; background: #edf3fb; color: #41628f; }
+.m5-progress .is-done i { border-color: #b8d2c1; background: #eff7f1; color: #568165; }
+.m5-story-card, .m5-context, .m5-observation, .m5-followup, .m5-second-preview, .m5-decision-card, .m5-decision { min-width: 0; margin: 13px 0; padding: 16px; border: 1px solid #dfe6ed; border-radius: 9px; background: white; }
+.m5-story-card { border-color: #d7e4f8; background: #f5f8ff; }
+.m5-story-card p { margin: 8px 0 0; color: #34465c; font-family: 'Manrope', sans-serif; font-size: 15px; font-weight: 600; line-height: 1.55; }
+.m5-context { background: #f8fafc; }
+.m5-context p, .m5-observation p { margin: 7px 0; color: #59697b; font-size: 12px; line-height: 1.55; }
+.m5-context > div { display: flex; justify-content: space-between; gap: 12px; margin-top: 13px; padding-top: 11px; border-top: 1px solid #e6ebf0; color: #526377; font-size: 11px; }
+.m5-context > div span { text-align: right; }
+.m5-observation { border-color: #d7e4f8; background: #f5f8ff; }
+.m5-app-layout { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(220px, .9fr); align-items: start; gap: 12px; margin: 13px 0; }
+.m5-product, .m5-task { min-width: 0; padding: 16px; border: 1px solid #dfe6ed; border-radius: 9px; background: #fff; }
+.m5-product { box-shadow: 0 7px 22px rgb(43 63 86 / 4%); }
+.m5-product-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-bottom: 10px; border-bottom: 1px solid #edf0f4; }
+.m5-product-head h2 { margin: 5px 0; color: #34465c; font-family: 'Manrope', sans-serif; font-size: 21px; }
+.m5-product > p { margin: 10px 0; color: #758294; font-size: 10px; }
+.m5-app-badge { padding: 4px 7px; border-radius: 4px; background: #eef6f0; color: #5f8d6e; font-size: 8px; font-weight: 700; letter-spacing: .5px; }
+.m5-club-card { margin-top: 9px; padding: 12px; border: 1px solid #e3eaf1; border-radius: 8px; background: #fbfcfd; }
+.m5-club-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.m5-club-heading > div { display: flex; min-width: 0; flex-direction: column; gap: 4px; }
+.m5-club-heading strong { color: #43566b; font-size: 11px; }
+.m5-club-heading > div > span { color: #8a95a2; font-size: 9px; }
+.m5-seats { flex: 0 0 auto; color: #76869a; font-size: 9px; line-height: 1.4; text-align: right; }
+.m5-club-card > .button { min-height: 35px; margin-top: 12px; padding: 0 12px; font-size: 10px; }
+.m5-joined-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-top: 12px; }
+.m5-joined-row > span { color: #62846e; font-size: 10px; font-weight: 600; }
+.m5-leave, .m5-disabled { min-height: 32px; padding: 0 10px; border: 1px solid #dce4ed; border-radius: 6px; background: white; color: #596a7e; font: inherit; font-size: 9px; cursor: pointer; }
+.m5-leave:hover { border-color: #9bb1d1; }
+.m5-result { margin: 11px 0 0; padding: 9px 10px; border-radius: 6px; font-size: 9px; line-height: 1.5; }
+.m5-result.is-good { border: 1px solid #cfe3d7; background: #f2f8f4; color: #457357; }
+.m5-result.is-problem { border: 1px solid #ead8c6; background: #fdf8f2; color: #906846; }
+.m5-my-clubs { display: flex; flex-direction: column; gap: 7px; margin-top: 10px; padding: 11px; border-radius: 7px; background: #f8fafc; }
+.m5-my-clubs strong { color: #526477; font-size: 10px; }
+.m5-my-clubs > span { color: #5d7968; font-size: 10px; }
+.m5-my-clubs small, .m5-my-clubs p { color: #8390a0; font-size: 9px; }
+.m5-my-clubs p { margin: 0; }
+.m5-other-club { opacity: .75; }
+.m5-disabled { margin-top: 10px; opacity: .55; cursor: default; }
+.m5-task { background: #f8fafc; }
+.m5-task > strong { display: block; margin-top: 8px; color: #465970; font-size: 12px; }
+.m5-task ol { margin: 11px 0; padding-left: 20px; color: #68788c; font-size: 10px; line-height: 1.9; }
+.m5-task > p { margin: 8px 0 0; padding-top: 9px; border-top: 1px solid #e4e9ef; color: #718094; font-size: 10px; line-height: 1.5; }
+.m5-choice { display: flex; width: 100%; flex-direction: column; align-items: flex-start; gap: 7px; padding: 13px; border: 1px solid #e1e7ee; border-radius: 8px; background: #fff; color: #526477; font: inherit; text-align: left; cursor: pointer; }
+.m5-choice:hover, .m5-choice.is-selected { border-color: #9bb3d3; background: #f5f8fd; }
+.m5-choice strong { color: #43566b; font-size: 11px; }
+.m5-choice span { color: #68788c; font-size: 10px; line-height: 1.55; }
+.m5-build-report { display: flex; gap: 11px; margin: 12px 0; padding: 14px; border: 1px solid #dfe6ed; border-radius: 9px; background: #f8fafc; }
+.m5-build-report > i { width: 8px; height: 8px; flex: 0 0 8px; margin-top: 4px; border-radius: 50%; background: #77a187; }
+.m5-build-report > div { min-width: 0; }
+.m5-build-report strong { color: #526477; font-size: 11px; }
+.m5-build-report p { margin: 6px 0; color: #566679; font-size: 11px; line-height: 1.5; }
+.m5-build-report span { color: #8490a0; font-size: 10px; }
+.m5-followup { display: flex; flex-direction: column; gap: 8px; border-color: #ead8c6; background: #fdfaf6; }
+.m5-followup > div p { margin: 5px 0 3px; color: #725f4e; font-size: 11px; line-height: 1.5; }
+.m5-followup .button { align-self: flex-start; }
+.m5-second-preview { display: flex; align-items: center; justify-content: space-between; gap: 14px; background: #f8fafc; }
+.m5-second-preview > div { display: flex; flex-direction: column; gap: 6px; }
+.m5-second-preview strong { color: #43566b; font-size: 12px; }
+.m5-second-preview > div > span:last-child { color: #718094; font-size: 10px; }
+.m5-decision-card { display: flex; flex-direction: column; gap: 6px; }
+.m5-decision-card.is-ready { border-color: #cfe3d7; background: #f2f8f4; }
+.m5-decision-card.is-not-ready { border-color: #ead8c6; background: #fdf8f2; }
+.m5-decision-card strong { color: #526477; font-size: 12px; }
+.m5-decision-card span { color: #718094; font-size: 10px; }
+.m5-decision-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.m5-decision { display: flex; flex-direction: column; gap: 7px; margin: 0; text-align: left; cursor: pointer; }
+.m5-decision:hover, .m5-decision.is-selected { border-color: #9bb3d3; background: #f5f8fd; }
+.m5-decision strong { color: #43566b; font-size: 11px; }
+.m5-decision span { color: #68788c; font-size: 10px; line-height: 1.5; }
+.m5-completion { margin-top: 20px; padding-top: 20px; border-top: 1px solid #e3e9ef; }
+.m5-completion > h2 { margin: 6px 0; color: #34465c; font-family: 'Manrope', sans-serif; font-size: 23px; }
+.m5-completion > p { color: #718094; font-size: 11px; }
+.m5-summary { margin-top: 12px; }
+.m5-summary .m3-summary-item p { overflow-wrap: anywhere; }
+.m5-completion .m2-skill-results > div > div:first-child > span { font-size: 10px; }
+.m5-shell button:focus-visible { outline: 3px solid #87a9d4; outline-offset: 2px; }
+.m5-shell button:disabled { opacity: .5; cursor: not-allowed; }
+@media (max-width: 680px) {
+  .m5-topbar { grid-template-columns: minmax(0, 1fr) auto; padding-bottom: 9px; }
+  .m5-topbar .m2-top-title { grid-row: 2; grid-column: 1 / -1; }
+  .m5-progress { gap: 2px; }
+  .m5-progress > span { flex-direction: column; gap: 2px; text-align: center; }
+  .m5-progress small { width: 100%; font-size: 7px; }
+  .m5-app-layout, .m5-decision-options { grid-template-columns: minmax(0, 1fr); }
+  .m5-second-preview { align-items: flex-start; flex-direction: column; }
+  .m5-context > div { flex-direction: column; gap: 4px; }
+  .m5-context > div span { text-align: left; }
+}

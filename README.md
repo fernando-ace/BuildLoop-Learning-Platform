@@ -1,6 +1,6 @@
 # BuildLoop — Learn to build with AI
 
-BuildLoop is a browser game about learning to build useful software with AI. Four short missions follow people as they find a real problem, ask an AI to build something useful, try what it made, and decide what should happen next.
+BuildLoop is a browser game about learning to build useful software with AI. Five short missions help learners understand a person’s need, set a goal, guide an AI Builder, try what it made, use evidence to improve it, and decide when it is ready to share.
 
 ## Run locally
 
@@ -13,17 +13,24 @@ The app is local-first. Mission progress is saved in browser storage; no account
 
 ## The learning loop
 
-Understand what matters, choose the next goal, give the AI enough context, try the result, and respond to what happened. Each mission uses a different fictional product and deterministic AI simulation.
+The course follows a growing product-building loop: human judgment → clear goal → AI implementation → human testing → evidence → focused iteration → verification → decision. Each mission uses a different fictional product and deterministic Builder simulation.
 
-Mission 4, **What Should We Build Next?**, starts from a working study-session app and a student’s feedback. Learners explore the problem, choose a goal for the Builder, try the updated app, give focused feedback when it needs work, and decide whether to share it.
+1. **The Missing Cameras:** understand a user’s problem and choose a useful first version.
+2. **The Vague Request:** turn a broad request into a clear goal and learn from feedback.
+3. **Build, Try, Improve:** treat building as a conversation; try the result and give a focused follow-up.
+4. **What Should We Build Next?:** use real feedback to choose what matters and judge whether the result is ready.
+5. **Something’s Broken:** reproduce a problem in ClubBoard, report what you expected and what happened, retest the Builder’s repair, and check that another club still works.
 
-Mission scenarios and deterministic build outcomes live in `src/lib/missions/`. Mission state is saved with the shared local progress record in [store.ts](src/lib/store.ts). Each mission has its own screen; existing saves continue to use the same browser storage key.
+Mission 5’s Builder behaves deterministically. A clear report fixes the membership display on the first build. A vague report misses the display issue, while an implementation guess changes the seat-count behavior and causes another club’s seat count to stop updating. Learners can report what they observe, receive a second build, repeat the original actions, and check Robotics Club before deciding whether to share.
+
+Mission scenarios, deterministic build outcomes, and skill scoring live in `src/lib/missions/`. Mission state is saved with the shared local progress record in [store.ts](src/lib/store.ts). Each mission has its own screen; Mission 5 adds fields to the existing save record and does not change its key, so existing Mission 1–4 saves remain available.
 
 ## Product decisions
 
 - Product evidence guides choices, while weaker but playable paths still show realistic consequences.
 - The simulated Builder is deterministic: the same choices produce the same result.
-- Learners try the product after a build and use observed behavior to guide any follow-up.
+- Learners try the product after a build, repeat the same steps after a repair, and check a nearby behavior before deciding.
+- Reports work best when they describe the action, expected result, and actual result; learners do not need to guess how the app was built.
 - Scores explain which choices they reflect instead of awarding generic XP.
 
 ## Validation
@@ -44,4 +51,4 @@ Mission scenarios and deterministic build outcomes live in `src/lib/missions/`. 
 
 ## Recommended real-user experiment
 
-Observe five to eight teenagers aged 13–18 completing the mission without coaching. Ask them to think aloud, then ask what they learned from the failed check, why they chose their iteration, and whether the shipped version helps Ari. Track time by stage, skipped tests, confusing controls, and whether they can explain that testing and feedback are evidence. Use those observations to revise the mission before adding another one.
+Observe teenagers aged 13–18 completing the five-mission course without coaching. Ask them to think aloud, then ask how they decided what to build, what they learned from a failed check, and what evidence they wanted before sharing. Track time by mission, skipped checks, confusing controls, and whether they distinguish what they saw from guesses about how the app works. Use those observations to revise the course before expanding it.
