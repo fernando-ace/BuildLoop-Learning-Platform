@@ -1,31 +1,41 @@
 import "server-only";
-import { BuilderError, buildPrompt, validateArtifact, type BuilderRequest, type BuilderResult, type GeneratedAppArtifact } from "./contract";
+import { BuilderError, buildPrompt, validateArtifact, type BuilderRequest, type BuilderResult, type GeneratedApp } from "./contract";
+import { diffArtifacts, v2Fixtures, type GeneratedAppV2 } from "./v2";
 
 export interface BuilderProvider { readonly name: "openai" | "deterministic"; generate(request: BuilderRequest): Promise<BuilderResult> }
 
-function deterministicArtifact(request: BuilderRequest): GeneratedAppArtifact {
-  const title = request.project.name.slice(0, 80) || "Your first app";
-  const intent = `${request.instruction} ${request.project.behavior}`.toLowerCase();
-  const old = request.previous?.blocks ?? [];
-  const blocks: GeneratedAppArtifact["blocks"] = [
-    { type: "heading", text: title },
-    { type: "text", text: request.project.problem.slice(0, 180) || request.project.behavior.slice(0, 180) || "A small tool for your first version." },
-  ];
-  const priorCollection = old.find((b) => b.type === "collection");
-  if (request.mode === "iteration" && priorCollection && !/counter|count|habit|number|total/.test(intent)) blocks.push(priorCollection);
-  else blocks.push({ type: "collection", title: request.project.inScope[0]?.slice(0, 180) || "Things to keep track of", inputLabel: "New item", addLabel: "Add item", emptyText: "Nothing here yet. Add the first one.", allowRemove: true, allowEdit: true, filterable: true });
-  if (/counter|count|habit|number|total|study session/.test(intent)) blocks.push({ type: "counter", label: "Completed today", initialValue: 0, increaseLabel: "Mark complete", decreaseLabel: "Undo" });
-  if (request.mode === "iteration" && /confirm|confirmation|success/.test(intent)) blocks.push({ type: "notice", text: `Your update: ${request.instruction.slice(0, 130)}` });
-  return { format: "buildloop-app-v1", title, summary: request.mode === "initial" ? `A working first version for ${request.project.user || "your user"}.` : `Updated to focus on: ${request.instruction.slice(0, 130)}`, blocks: blocks.slice(0, 12), changeSummary: request.mode === "initial" ? ["Created the first interactive version", "Kept Later Ideas out of this version"] : [`Focused on: ${request.instruction.slice(0, 120)}`, "Kept the existing project behavior"], testTasks: ["Add an item and check what appears", "Try removing an item", "Try the main task as your user"] };
+function deterministicV2Artifact(request: BuilderRequest): GeneratedAppV2 {
+  const prompt = `${request.project.name} ${request.project.problem} ${request.instruction}`.toLowerCase();
+  const fixture = /equipment|checkout|inventory/.test(prompt) ? v2Fixtures[0] : /volunteer|shift|event/.test(prompt) ? v2Fixtures[1] : /lost|found|claim/.test(prompt) ? v2Fixtures[3] : v2Fixtures[2];
+  if (request.previous?.format === "buildloop-app-v2") {
+    const previous = structuredClone(request.previous);
+    const target = previous.collections[0];
+    const asksForDate = /date|due|when/.test(request.instruction.toLowerCase());
+    if (asksForDate && !target.fields.some((field) => field.id === "due_date")) {
+      target.fields.push({ id: "due_date", label: "Due date", type: "date" });
+      previous.screens.filter((screen) => screen.collection === target.id && screen.view !== "form").forEach((screen) => { screen.fields = [...(screen.fields ?? target.fields.slice(0, -1).map((field) => field.id)), "due_date"]; });
+    }
+    previous.summary = `Updated to focus on: ${request.instruction.slice(0, 120)}`;
+    previous.changeSummary = diffArtifacts(request.previous, previous);
+    return previous;
+  }
+  const artifact = structuredClone(fixture);
+  artifact.title = request.project.name.slice(0, 80) || fixture.title;
+  artifact.summary = request.mode === "initial" ? `A practical first version for ${request.project.user || "your team"}.` : `Updated to focus on: ${request.instruction.slice(0, 120)}`;
+  artifact.changeSummary = ["Added screens", "Added structured records", "Added a focused workflow"];
+  return artifact;
 }
 
-function withObservedChanges(request: BuilderRequest, artifact: GeneratedAppArtifact): GeneratedAppArtifact {
+function withObservedChanges(request: BuilderRequest, artifact: GeneratedApp): GeneratedApp {
+  if (artifact.format === "buildloop-app-v2") {
+    return { ...artifact, changeSummary: request.previous?.format === "buildloop-app-v2" ? diffArtifacts(request.previous, artifact) : ["Added screens", "Added structured records", "Added a focused workflow"] };
+  }
   const label = (type: string) => type === "collection" ? "interactive list" : type === "counter" ? "completion counter" : type === "notice" ? "status message" : type === "heading" ? "heading" : "description";
-  if (!request.previous) {
+  if (!request.previous || request.previous.format !== "buildloop-app-v1") {
     const types = [...new Set(artifact.blocks.map((block) => label(block.type)))];
     return { ...artifact, changeSummary: types.map((type) => `Added ${type}`).slice(0, 6) };
   }
-  const before = request.previous.blocks;
+  const before = request.previous.format === "buildloop-app-v1" ? request.previous.blocks : [];
   const after = artifact.blocks;
   let kept = 0;
   const changes: string[] = [];
@@ -45,7 +55,7 @@ function withObservedChanges(request: BuilderRequest, artifact: GeneratedAppArti
 
 export const deterministicBuilder: BuilderProvider = {
   name: "deterministic",
-    async generate(request) { const artifact = deterministicArtifact(request); const result = validateArtifact(withObservedChanges(request, artifact)); if (!result.ok) throw new BuilderError("invalid_output", result.issues.join("; ")); return { provider: "deterministic", artifact: result.artifact, attempts: 1 }; },
+    async generate(request) { const artifact = deterministicV2Artifact(request); const result = validateArtifact(withObservedChanges(request, artifact)); if (!result.ok) throw new BuilderError("invalid_output", result.issues.join("; ")); return { provider: "deterministic", artifact: result.artifact, attempts: 1 }; },
 };
 
 function extractOutputText(value: unknown): string | null {

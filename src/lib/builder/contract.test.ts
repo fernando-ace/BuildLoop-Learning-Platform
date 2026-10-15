@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { BuilderError, buildPrompt, validateArtifact, type GeneratedAppArtifact } from "./contract";
 import { deterministicBuilder, getBuilder, openAIBuilder } from "./provider";
+import { applyRuntimeAction, deriveMetric, seedRuntimeData, validateArtifactV2, v2Fixtures } from "./v2";
 
 const base: GeneratedAppArtifact = { format: "buildloop-app-v1", title: "Club volunteer signup", summary: "A first version for volunteers", blocks: [{ type: "heading", text: "Volunteer shifts" }, { type: "text", text: "Pick a shift that works for you." }, { type: "collection", title: "Available shifts", inputLabel: "Your name and shift", addLabel: "Sign up", emptyText: "No signups yet", allowRemove: true, allowEdit: true, filterable: true }], changeSummary: ["Created an interactive signup list"], testTasks: ["Sign up for a shift", "Remove a signup"] };
 
@@ -35,10 +36,13 @@ describe("constrained BuildLoop app format", () => {
 
   it("builds a deterministic interactive artifact and carries previous-version context", async () => {
     const first = await deterministicBuilder.generate(request);
-    expect(first.artifact.blocks.some((block) => block.type === "collection")).toBe(true);
+    expect(first.artifact.format).toBe("buildloop-app-v2");
+    if (first.artifact.format !== "buildloop-app-v2") throw new Error("Expected V2");
+    expect(first.artifact.screens.some((screen) => screen.view === "form")).toBe(true);
     const updated = await deterministicBuilder.generate({ ...request, mode: "iteration", version: 2, previous: first.artifact, instruction: "Show a confirmation after signup", observations: [{ action: "Sign up", expected: "See confirmation", happened: "No confirmation appeared", kind: "core", version: 1 }], repairIssues: undefined });
-    expect(updated.artifact.blocks.some((block) => block.type === "collection")).toBe(true);
-    expect(updated.artifact.blocks.some((block) => block.type === "notice")).toBe(true);
+    expect(updated.artifact.format).toBe("buildloop-app-v2");
+    if (updated.artifact.format !== "buildloop-app-v2") throw new Error("Expected V2");
+    expect(updated.artifact.collections[0].id).toBe(first.artifact.collections[0].id);
     expect(updated.attempts).toBe(1);
   });
 
@@ -54,9 +58,21 @@ describe("constrained BuildLoop app format", () => {
       const built = await deterministicBuilder.generate({ ...request, project: { ...request.project, name, problem }, instruction: `Make a simple ${name.toLowerCase()} for this problem` });
       expect(validateArtifact(built.artifact).ok, name).toBe(true);
       expect(built.artifact.title).toBe(name);
-      expect(built.artifact.blocks.some((block) => block.type === "collection"), name).toBe(true);
-      expect(built.artifact.blocks.some((block) => JSON.stringify(block).includes("Send text reminders")), name).toBe(false);
+      expect(built.artifact.format).toBe("buildloop-app-v2");
+      if (built.artifact.format !== "buildloop-app-v2") throw new Error("Expected V2");
+      expect(built.artifact.screens.some((screen) => screen.collection), name).toBe(true);
+      expect(JSON.stringify(built.artifact).includes("Send text reminders"), name).toBe(false);
     }
+  });
+
+  it("validates four distinct app fixtures and exercises pure data actions and metrics", () => {
+    for (const fixture of v2Fixtures) expect(validateArtifactV2(fixture).ok, fixture.title).toBe(true);
+    const tasks = v2Fixtures[2]; const data = seedRuntimeData(tasks);
+    expect(deriveMetric(data, tasks.metrics[0])).toBe(0);
+    const added = { ...data, tasks: [...data.tasks, { id: "tasks_2", title: "Review", status: "Done" }] };
+    expect(deriveMetric(added, tasks.metrics[0])).toBe(1);
+    const removed = applyRuntimeAction(added, { id: "remove", label: "Remove", type: "delete", collection: "tasks" }, "tasks_2");
+    expect(removed.tasks).toHaveLength(1);
   });
 
   it("reports missing live configuration without calling a provider", async () => {

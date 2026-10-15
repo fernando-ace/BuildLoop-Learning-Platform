@@ -12,7 +12,7 @@ describe("Studio Builder route", () => {
     const response = await POST(request(payload));
     const result = await response.json();
     expect(response.status).toBe(200);
-    expect(result).toMatchObject({ provider: "deterministic", attempts: 1, artifact: { format: "buildloop-app-v1" } });
+    expect(result).toMatchObject({ provider: "deterministic", attempts: 1, artifact: { format: "buildloop-app-v2" } });
   });
 
   it("rejects cross-origin and malformed requests before generation", async () => {

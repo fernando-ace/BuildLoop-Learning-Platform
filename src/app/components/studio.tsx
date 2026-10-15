@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useSyncExternalStore, type ReactNode } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { buildBrief, createProject, currentProject, goalCoaching, inspectInstruction, problemCoaching, recordBuild, recordFeedback, recordObservation, setBuildState, studioSummary, updateVersionNotes, type StudioProject, type StudioStage } from "@/lib/studio";
 import { buildPreviewDocument } from "@/lib/builder/preview";
 import { validateArtifact } from "@/lib/builder/contract";
+import { validateArtifactV2, type GeneratedAppV2 } from "@/lib/builder/v2";
 import { createStudioProject, deleteStudioProject, getServerStudioState, getStudioState, getStudioStorageMessage, openStudioProject, setStudioStage, showStudioHub, subscribeStudio, updateStudioProject } from "@/lib/studio-store";
 
 const labels: Record<StudioStage, string> = { idea: "Your idea", scope: "Version 1", brief: "Builder Brief", try: "Try it", feedback: "Feedback", goal: "Next goal", retest: "Retest", summary: "Project summary" };
@@ -16,6 +17,41 @@ function ProjectList({ projects }: { projects: StudioProject[] }) {
   return <section className="studio-project-list"><div className="studio-section-title"><div><span className="eyebrow">YOUR STUDIO</span><h2>Projects</h2></div><button className="button button-primary" onClick={() => openStudioProject(null)}>Start a project <span aria-hidden="true">→</span></button></div>
     {projects.length ? <div className="studio-projects">{projects.map((project) => <article className="studio-project-row" key={project.id}><div><span className="eyebrow">{project.versions.length ? `${project.versions.length} VERSION${project.versions.length === 1 ? "" : "S"}` : "NEW IDEA"}</span><h3>{project.name}</h3><p>{project.problem || "Your project is ready to take shape."}</p></div><button className="button button-quiet" onClick={() => openStudioProject(project.id)}>{project.stage === "summary" ? "Open summary" : "Resume project"} →</button></article>)}</div> : <p className="studio-empty">Your own projects will show up here.</p>}
   </section>;
+}
+
+function V2PreviewFrame({ artifact, projectId, version }: { artifact: GeneratedAppV2; projectId: string; version: number }) {
+  const frame = useRef<HTMLIFrameElement>(null);
+  const storageKey = `buildloop-runtime-v2:${encodeURIComponent(projectId)}:${version}`;
+  useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      if (!frame.current?.contentWindow || event.source !== frame.current.contentWindow) return;
+      const message = event.data;
+      if (!message || message.channel !== "buildloop-v2" || message.projectId !== projectId || message.version !== version) return;
+      const send = (type: string, data?: unknown) => frame.current?.contentWindow?.postMessage({ channel: "buildloop-v2", type, projectId, version, data }, "*");
+      if (message.type === "load") {
+        try {
+          const raw = window.localStorage.getItem(storageKey);
+          const saved = raw ? JSON.parse(raw) as unknown : null;
+          if (saved && typeof saved === "object" && !Array.isArray(saved)) {
+            const candidate = { ...artifact, collections: artifact.collections.map((collection) => ({ ...collection, seed: (saved as Record<string, unknown>)[collection.id] })) };
+            const checked = validateArtifactV2(candidate);
+            if (checked.ok) send("state", Object.fromEntries(checked.artifact.collections.map((collection) => [collection.id, collection.seed ?? []])));
+            else send("state", null);
+          } else send("state", null);
+        } catch { send("state", null); }
+      } else if (message.type === "save") {
+        const candidate = { ...artifact, collections: artifact.collections.map((collection) => ({ ...collection, seed: message.data?.[collection.id] })) };
+        const checked = validateArtifactV2(candidate);
+        if (checked.ok) {
+          try { window.localStorage.setItem(storageKey, JSON.stringify(Object.fromEntries(checked.artifact.collections.map((collection) => [collection.id, collection.seed ?? []])))); } catch { /* Preview remains usable for this session if browser storage is full. */ }
+        }
+      }
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [artifact, projectId, storageKey, version]);
+  const reset = () => frame.current?.contentWindow?.postMessage({ channel: "buildloop-v2", type: "reset", projectId, version }, "*");
+  return <div className="studio-preview"><div className="studio-preview-head"><span className="eyebrow">INTERACTIVE APP PREVIEW · VERSION {version}</span><button className="text-button" type="button" onClick={reset}>Reset preview data</button></div><iframe ref={frame} title={`${artifact.title} interactive preview`} sandbox="allow-scripts" referrerPolicy="no-referrer" srcDoc={buildPreviewDocument(artifact, { projectId, version })} /></div>;
 }
 
 function NewProjectForm() {
@@ -72,7 +108,7 @@ export function Studio({ onBack, courseComplete }: { onBack: () => void; courseC
   const progress = project.stage !== "summary" ? <nav className="studio-progress" aria-label="Project steps">{stages.slice(0, 7).map((step, i) => <span key={step} className={i <= index ? "is-current" : ""}>{i + 1}<small>{labels[step]}</small></span>)}</nav> : null;
   const heading = (title: string, description: string) => <div className="studio-heading"><span className="eyebrow">{project.name} · {labels[project.stage].toUpperCase()}</span><h1>{title}</h1><p>{description}</p></div>;
   const continueButton = (label: string, onClick: () => void, disabled = false) => <div className="studio-actions"><button className="button button-primary" onClick={onClick} disabled={disabled} type="button">{label} →</button></div>;
-  const preview = (artifact: import("@/lib/builder/contract").GeneratedAppArtifact) => <div className="studio-preview"><div className="studio-preview-head"><span className="eyebrow">INTERACTIVE APP PREVIEW</span><span>Runs in an isolated preview</span></div><iframe title={`${artifact.title} interactive preview`} sandbox="allow-scripts" referrerPolicy="no-referrer" srcDoc={buildPreviewDocument(artifact)} /></div>;
+  const preview = (artifact: import("@/lib/builder/contract").GeneratedApp, version: number) => artifact.format === "buildloop-app-v2" ? <V2PreviewFrame artifact={artifact} projectId={project.id} version={version} /> : <div className="studio-preview"><div className="studio-preview-head"><span className="eyebrow">INTERACTIVE APP PREVIEW</span><span>Runs in an isolated preview</span></div><iframe title={`${artifact.title} interactive preview`} sandbox="allow-scripts" referrerPolicy="no-referrer" srcDoc={buildPreviewDocument(artifact)} /></div>;
   let content: React.ReactNode;
   if (project.stage === "idea") {
     const coaching = problemCoaching(project.problem, project.user);
@@ -95,7 +131,7 @@ export function Studio({ onBack, courseComplete }: { onBack: () => void; courseC
     const latest = project.versions.at(-1)!;
     content = <>{heading("Try the app before asking for changes.", "Use it for a real task. Notice what worked, what felt confusing, and what surprised you.")}
       <article className="studio-result"><span className="eyebrow">VERSION {latest.number} · {latest.result.provider === "deterministic" ? "DETERMINISTIC TEST BUILDER" : latest.result.provider === "openai" ? "AI BUILDER" : "LEGACY DEMO"}</span><h2>{latest.result.title}</h2><p>{latest.result.description}</p>{latest.result.artifact?.changeSummary.map((item) => <p key={item}>• {item}</p>)}<details><summary>Builder Brief used</summary><p>{latest.instruction}</p></details></article>
-      {latest.result.artifact ? preview(latest.result.artifact) : <p className="studio-coach">This saved version was created before interactive previews were available.</p>}
+      {latest.result.artifact ? preview(latest.result.artifact, latest.number) : <p className="studio-coach">This saved version was created before interactive previews were available.</p>}
       {latest.result.artifact && <section className="studio-test-hint"><strong>Try a task</strong><ul>{latest.result.artifact.testTasks.map((task) => <li key={task}>{task}</li>)}</ul><p>Choose one of these or write your own task in your observation.</p></section>}
       {field("studio-version-notes", "A note for this version", latest.notes, (notes) => updateStudioProject(project.id, (current) => updateVersionNotes(current, notes)), "What do you want to remember about this build?")}
       <div className="studio-context"><span className="eyebrow">TRY CHECKLIST</span><p>Can someone {project.behavior || "complete the main task"}?</p><p>Does the result match your instruction? Did anything unexpected happen?</p></div>
@@ -115,7 +151,7 @@ export function Studio({ onBack, courseComplete }: { onBack: () => void; courseC
     content = <>{heading("Try it again, then check nearby behavior.", "Repeat the earlier task to see whether your change helped. Then check that something nearby still works.")}
       {previousTest && <section className="studio-context"><span className="eyebrow">REPEAT YOUR VERSION {previousTest.version} TASK</span><p>You tried: {previousTest.action}</p><p>You expected: {previousTest.expected}</p><p>Then: {previousTest.happened}</p></section>}
       <article className="studio-result compact"><span className="eyebrow">VERSION {latest.number} · BUILDER CHANGE SUMMARY</span><p>{project.nextGoal}</p>{latest.result.artifact?.changeSummary.map((item) => <p key={item}>• {item}</p>)}{!latest.result.artifact && <p>{latest.result.description}</p>}</article>
-      {latest.result.artifact && preview(latest.result.artifact)}
+      {latest.result.artifact && preview(latest.result.artifact, latest.number)}
       {field("studio-version-notes", "A note for this version", latest.notes, (notes) => updateStudioProject(project.id, (current) => updateVersionNotes(current, notes)), "What do you want to remember about this update?")}
       <section className="studio-test">{field("studio-retest-action", "Repeat: what did you do?", action, setAction, "Repeat the same steps as before")}{field("studio-retest-expected", "What did you expect this time?", expected, setExpected, "What should the change do?")}{field("studio-retest-happened", "What happened?", happened, setHappened, "What did you observe?")}{field("studio-nearby", "Check one nearby behavior", nearby, setNearby, "What else did you try, and did it still work?", true)}</section>
       {continueButton("See your project summary", () => { updateStudioProject(project.id, (current) => ({ ...recordObservation(recordObservation(current, { action, expected, happened, kind: "core" }), { action: "Nearby check", expected: "Working behavior stays intact", happened: nearby, kind: "nearby" }), stage: "summary" })); }, !action.trim() || !nearby.trim())}</>;
@@ -127,7 +163,7 @@ export function Studio({ onBack, courseComplete }: { onBack: () => void; courseC
       {summary.practiceNext.length > 0 && <section className="studio-evidence"><span className="eyebrow">A COUPLE OF THINGS TO PRACTICE NEXT</span><p>{summary.practiceNext.join(" · ")}</p></section>}
       <section className="studio-share"><h2>Is this ready to share?</h2><p>Make a deliberate choice based on what you tested.</p><div><button className={`button ${project.shareDecision === "ready" ? "button-primary" : "button-quiet"}`} onClick={() => patch({ shareDecision: "ready" })}>Ready to share</button><button className={`button ${project.shareDecision === "keep_working" ? "button-primary" : "button-quiet"}`} onClick={() => patch({ shareDecision: "keep_working" })}>Keep working</button></div></section>
       <div className="studio-history"><span className="eyebrow">PROJECT HISTORY</span>{project.versions.map((version) => <article key={version.number}><strong>Version {version.number}</strong><span>{new Date(version.builtAt).toLocaleString()}</span><p><b>Instruction:</b> {version.instruction}{version.notes && <> · <b>Note:</b> {version.notes}</>}</p><small>{version.tested ? "Tested" : "Not tested yet"}</small>{version.result.artifact && <button className="text-button" onClick={() => setViewingVersion(version.number)} type="button">Preview Version {version.number}</button>}</article>)}</div>
-      {viewingVersion !== null && (() => { const version = project.versions.find((item) => item.number === viewingVersion); return version?.result.artifact ? <section><h2>Version {version.number} preview</h2>{preview(version.result.artifact)}<button className="text-button" onClick={() => setViewingVersion(null)} type="button">Close older preview</button></section> : null; })()}
+      {viewingVersion !== null && (() => { const version = project.versions.find((item) => item.number === viewingVersion); return version?.result.artifact ? <section><h2>Version {version.number} preview</h2>{preview(version.result.artifact, version.number)}<button className="text-button" onClick={() => setViewingVersion(null)} type="button">Close older preview</button></section> : null; })()}
       <div className="studio-actions"><button className="button button-quiet" onClick={() => advance("goal")}>Build another version</button><button className="button button-primary" onClick={showStudioHub}>All Studio projects →</button></div></>;
   }
   const editDetails = project.stage === "idea" ? null : <details className="studio-edit-details"><summary>Edit project details</summary><div className="studio-form">{field("edit-user", "Who is this for?", project.user, (user) => patch({ user, brief: null }), "A specific person or group")}{field("edit-problem", "What problem are they facing?", project.problem, (problem) => patch({ problem, brief: null }), "Describe the hard part.", true)}{field("edit-why", "Why does it matter?", project.why, (why) => patch({ why }), "What could get easier?")}</div></details>;
