@@ -38,7 +38,7 @@ export class BuilderError extends Error {
 }
 
 export const MAX_ARTIFACT_BYTES = 24_000;
-export const MAX_BUILDER_INPUT_CHARS = 12_000;
+export const MAX_BUILDER_INPUT_CHARS = 64_000;
 
 export function validateArtifact(value: unknown): { ok: true; artifact: GeneratedApp } | { ok: false; issues: string[] } {
   if (value && typeof value === "object" && !Array.isArray(value) && (value as Record<string, unknown>).format === "buildloop-app-v2") return validateArtifactV2(value);

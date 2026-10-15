@@ -1,4 +1,4 @@
-import { BuilderError, MAX_BUILDER_INPUT_CHARS, type BuilderRequest } from "@/lib/builder/contract";
+import { BuilderError, MAX_BUILDER_INPUT_CHARS, validateArtifact, type BuilderRequest } from "@/lib/builder/contract";
 import { getBuilder } from "@/lib/builder/provider";
 
 export const runtime = "nodejs";
@@ -8,6 +8,7 @@ const hits = new Map<string, number[]>();
 const limits = { name: 80, user: 500, problem: 1000, why: 500, behavior: 1000, constraints: 1000 };
 
 function isBoundedText(value: unknown, max: number): value is string { return typeof value === "string" && value.length <= max; }
+function isRecord(value: unknown): value is Record<string, unknown> { return Boolean(value && typeof value === "object" && !Array.isArray(value)); }
 function allowedOrigin(request: Request) {
   const origin = request.headers.get("origin");
   if (!origin) return false;
@@ -30,13 +31,22 @@ export async function POST(request: Request) {
   const project = value.project as Record<string, unknown> | null;
   if (!project || !Object.entries(limits).every(([key, max]) => isBoundedText(project[key], max)) || !Array.isArray(project.inScope) || project.inScope.length > 12 || !project.inScope.every((x) => isBoundedText(x, 180)) || !Array.isArray(project.laterIdeas) || project.laterIdeas.length > 12 || !project.laterIdeas.every((x) => isBoundedText(x, 180))) return Response.json({ error: "The Builder request was incomplete." }, { status: 400 });
   if (!isBoundedText(value.instruction, 1200) || value.instruction.length > MAX_BUILDER_INPUT_CHARS || !["initial", "iteration"].includes(String(value.mode)) || !Number.isInteger(value.version) || Number(value.version) < 1 || Number(value.version) > 20) return Response.json({ error: "The Builder request was incomplete." }, { status: 400 });
+  const observationRows = Array.isArray(value.observations) ? value.observations.slice(-8) : [];
+  if (observationRows.some((entry) => isRecord(entry) && Object.values(entry).some((item) => typeof item === "string" && item.length > 1_000))) return Response.json({ error: "The project history is too long to include in one build." }, { status: 413 });
+  if (observationRows.some((entry) => !isRecord(entry) || Object.keys(entry).some((key) => !["action", "expected", "happened", "kind", "version"].includes(key)) || !["action", "expected", "happened"].every((key) => typeof entry[key] === "string") || !["core", "nearby"].includes(String(entry.kind)) || !Number.isInteger(entry.version))) return Response.json({ error: "The Builder request was incomplete." }, { status: 400 });
+  const feedbackRows = Array.isArray(value.feedback) ? value.feedback.slice(-8) : [];
+  if (feedbackRows.some((entry) => isRecord(entry) && Object.values(entry).some((item) => typeof item === "string" && item.length > 1_000))) return Response.json({ error: "The project history is too long to include in one build." }, { status: 413 });
+  if (feedbackRows.some((entry) => !isRecord(entry) || Object.keys(entry).some((key) => !["from", "note", "version"].includes(key)) || typeof entry.from !== "string" || typeof entry.note !== "string" || !Number.isInteger(entry.version))) return Response.json({ error: "The Builder request was incomplete." }, { status: 400 });
+  if (feedbackRows.some((entry) => (entry as Record<string, string>).from.length > 100)) return Response.json({ error: "The project history is too long to include in one build." }, { status: 413 });
+  const previousValidation = value.previous === undefined ? undefined : validateArtifact(value.previous);
+  if (previousValidation && !previousValidation.ok) return Response.json({ error: "The previous app version is not valid for another build." }, { status: 400 });
   const input = JSON.stringify(body);
   if (input.length > MAX_BUILDER_INPUT_CHARS * 2) return Response.json({ error: "This project has too much history to include in one build." }, { status: 413 });
   const safe: BuilderRequest = {
     project: project as BuilderRequest["project"], mode: value.mode as BuilderRequest["mode"], version: Number(value.version), instruction: value.instruction,
-    previous: value.previous as BuilderRequest["previous"],
-    observations: Array.isArray(value.observations) ? value.observations.slice(-8) as BuilderRequest["observations"] : [],
-    feedback: Array.isArray(value.feedback) ? value.feedback.slice(-8) as BuilderRequest["feedback"] : [],
+    previous: previousValidation?.artifact,
+    observations: observationRows as BuilderRequest["observations"],
+    feedback: feedbackRows as BuilderRequest["feedback"],
   };
   try { return Response.json(await getBuilder().generate(safe), { headers: { "Cache-Control": "no-store" } }); }
   catch (error) {

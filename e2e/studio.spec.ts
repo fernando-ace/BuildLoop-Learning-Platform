@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-async function startProject(page: Page, checkEntryResponsive = false) {
+async function startProject(page: Page, checkEntryResponsive = false, details = { name: "Topic Tracker", user: "Students who study after school", problem: "They lose track of which topics need more practice before a test", why: "They want to use their study time well" }) {
   await page.goto("/");
   await page.evaluate(() => localStorage.clear());
   await page.reload();
@@ -8,10 +8,10 @@ async function startProject(page: Page, checkEntryResponsive = false) {
   if (checkEntryResponsive) await checkStudioWidths(page, "project list");
   await page.getByRole("button", { name: "Start a project" }).click();
   if (checkEntryResponsive) await checkStudioWidths(page, "new project");
-  await page.getByLabel("Project name").fill("Topic Tracker");
-  await page.getByLabel("Who is this for?").fill("Students who study after school");
-  await page.getByLabel("What are they trying to do, and what gets in the way?").fill("They lose track of which topics need more practice before a test");
-  await page.getByLabel("Why does solving this matter?").fill("They want to use their study time well");
+  await page.getByLabel("Project name").fill(details.name);
+  await page.getByLabel("Who is this for?").fill(details.user);
+  await page.getByLabel("What are they trying to do, and what gets in the way?").fill(details.problem);
+  await page.getByLabel("Why does solving this matter?").fill(details.why);
   await page.getByRole("button", { name: "Create project" }).click();
 }
 
@@ -53,23 +53,31 @@ test("Studio supports build, try, feedback, iteration, retest, summary, and refr
   const csp = await page.frameLocator('iframe[title="Topic Tracker interactive preview"]').locator('meta[http-equiv="Content-Security-Policy"]').getAttribute("content");
   expect(csp).toContain("connect-src 'none'");
   const preview = page.frameLocator('iframe[title="Topic Tracker interactive preview"]');
-  await preview.getByRole("button", { name: "Add item" }).click();
-  await expect(preview.getByRole("status")).toContainText("Enter a value to add it");
-  await preview.getByRole("textbox", { name: "New item" }).fill("Biology review");
-  await preview.getByRole("button", { name: "Add item" }).click();
-  await expect(preview.getByRole("status")).toContainText("Added successfully");
-  await preview.getByRole("button", { name: "Edit" }).click();
-  await preview.getByRole("textbox", { name: "Edit item" }).fill("Biology exam");
+  await expect(preview.getByRole("heading", { name: "Team tasks" })).toBeVisible();
+  await preview.getByRole("button", { name: "Add record" }).click();
+  await preview.getByLabel("Task").fill("Biology review");
+  await preview.getByRole("button", { name: "Create record" }).click();
+  await expect(preview.getByText("Biology review")).toBeVisible();
+  const biology = preview.locator(".record").filter({ hasText: "Biology review" });
+  await biology.getByRole("button", { name: "Edit" }).click();
+  await preview.getByLabel("Task").fill("Biology exam");
   await preview.getByRole("button", { name: "Save changes" }).click();
   await expect(preview.getByText("Biology exam")).toBeVisible();
-  await preview.getByRole("button", { name: "Remove" }).click();
+  await preview.getByRole("searchbox", { name: "Search Tasks" }).fill("Biology");
+  await expect(preview.getByText("Plan kickoff")).toHaveCount(0);
+  await expect(preview.getByText("Biology exam")).toBeVisible();
+  await preview.getByRole("searchbox", { name: "Search Tasks" }).fill("");
+  await preview.getByRole("button", { name: "To do" }).click();
+  await expect(preview.getByText("Plan kickoff")).toBeVisible();
   await expect(preview.getByText("Biology exam")).toHaveCount(0);
+  await preview.getByRole("button", { name: "To do" }).click();
   await page.setViewportSize({ width: 390, height: 844 });
   const appSize = await preview.locator("body").evaluate((body) => [body.scrollWidth, body.clientWidth]);
   expect(appSize[0], "generated app horizontal overflow at 390px").toBeLessThanOrEqual(appSize[1]);
   await page.setViewportSize({ width: 1440, height: 950 });
   await page.reload();
   await expect(page.getByRole("heading", { name: "Try the app before asking for changes." })).toBeVisible();
+  await expect(page.frameLocator('iframe[title="Topic Tracker interactive preview"]').getByText("Biology exam")).toBeVisible();
   await page.getByLabel("What did you do?").fill("Opened the topic list and looked for today's topic");
   await page.getByLabel("What did you expect?").fill("See topics due today");
   await page.getByLabel("What happened instead?").fill("The list did not show when the topics were due");
@@ -79,9 +87,15 @@ test("Studio supports build, try, feedback, iteration, retest, summary, and refr
   await page.getByLabel("What did they notice or say?").fill("I wanted to see the due date next to each topic");
   await page.getByRole("button", { name: "Choose what to work on next" }).click();
   await checkStudioWidths(page, "next goal");
-  await page.getByLabel("What should change next?").fill("Students can see the due date next to every topic");
+  await page.getByLabel("What should change next?").fill("Students can see a due date next to every task");
   await page.getByRole("button", { name: "Build Version 2" }).click();
   await expect(page.getByText("VERSION 2 · BUILDER CHANGE SUMMARY")).toBeVisible();
+  const v2preview = page.frameLocator('iframe[title="Topic Tracker interactive preview"]');
+  await v2preview.getByRole("button", { name: "Add record" }).click();
+  await expect(v2preview.getByLabel("Due date")).toBeVisible();
+  await v2preview.getByRole("button", { name: "Cancel" }).click();
+  await expect(v2preview.getByText("Plan kickoff")).toBeVisible();
+  await expect(v2preview.getByText("Biology exam")).toHaveCount(0);
   await checkStudioWidths(page, "Version 2 retest");
   await page.reload();
   await expect(page.getByText("VERSION 2 · BUILDER CHANGE SUMMARY")).toBeVisible();
@@ -107,6 +121,95 @@ test("Studio supports build, try, feedback, iteration, retest, summary, and refr
     expect(size[0], `horizontal overflow at ${width}px`).toBeLessThanOrEqual(size[1]);
   }
   expect(errors).toEqual([]);
+});
+
+test("V2 equipment table supports navigation, detail, forms, filtering, and reset at mobile widths", async ({ page }) => {
+  await startProject(page, false, { name: "Equipment checkout", user: "Club members", problem: "They need to find and check out shared equipment", why: "The club needs to know what is available" });
+  await page.getByRole("button", { name: "Choose a small first version" }).click();
+  await page.getByLabel("Feature idea").fill("Track equipment and checkout state");
+  await page.getByRole("button", { name: "Add idea" }).click();
+  await page.getByRole("button", { name: "Write the Builder Brief" }).click();
+  await page.getByLabel("Your Builder instruction").fill("Build an equipment inventory with categories, quantities, and availability.");
+  await page.getByRole("button", { name: "Build Version 1" }).click();
+  const app = page.frameLocator('iframe[title="Equipment checkout interactive preview"]');
+  await expect(app.getByRole("heading", { name: "Inventory" })).toBeVisible();
+  await expect(app.getByRole("cell", { name: "Projector" })).toBeVisible();
+  await app.getByRole("button", { name: "Add record" }).click();
+  await app.getByRole("button", { name: "Create record" }).click();
+  await expect(app.getByRole("status")).toContainText("Item is required");
+  await app.getByLabel("Item").fill("Tripod");
+  await app.getByLabel("Category").selectOption("Sports");
+  await app.getByLabel("Quantity").fill("3");
+  for (const width of [390, 430, 1365, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    const size = await app.locator("body").evaluate((body) => [body.scrollWidth, body.clientWidth]);
+    expect(size[0], `equipment form horizontal overflow at ${width}px`).toBeLessThanOrEqual(size[1]);
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await app.getByRole("button", { name: "Create record" }).click();
+  await expect(app.getByRole("cell", { name: "Tripod" })).toBeVisible();
+  await expect(app.getByRole("row").nth(1)).toContainText("Projector");
+  await expect(app.getByRole("row").nth(2)).toContainText("Tripod");
+  await app.getByRole("button", { name: "View details" }).last().click();
+  await expect(app.getByRole("heading", { name: "Equipment details" })).toBeVisible();
+  await expect(app.getByText("Tripod")).toBeVisible();
+  for (const width of [390, 430, 1365, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    const size = await app.locator("body").evaluate((body) => [body.scrollWidth, body.clientWidth]);
+    expect(size[0], `equipment detail horizontal overflow at ${width}px`).toBeLessThanOrEqual(size[1]);
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await app.getByRole("button", { name: "Inventory" }).click();
+  await app.getByRole("searchbox", { name: "Equipment" }).fill("Tripod");
+  await expect(app.getByRole("cell", { name: "Projector" })).toHaveCount(0);
+  const tripod = app.getByRole("row").filter({ hasText: "Tripod" });
+  await tripod.getByRole("button", { name: "Toggle Checked out" }).click();
+  await expect(tripod).toContainText("Yes");
+  await tripod.getByRole("button", { name: "Increase Quantity" }).click();
+  await expect(tripod).toContainText("4");
+  await tripod.getByRole("button", { name: "View details" }).click();
+  await expect(app.getByRole("heading", { name: "Equipment details" })).toBeVisible();
+  await expect(app.getByText("Checked out: Yes")).toBeVisible();
+  await expect(app.getByText("Quantity: 4")).toBeVisible();
+  await app.getByRole("button", { name: "Inventory" }).click();
+  for (const width of [390, 430, 1365, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    const size = await app.locator("body").evaluate((body) => [body.scrollWidth, body.clientWidth]);
+    expect(size[0], `equipment preview horizontal overflow at ${width}px`).toBeLessThanOrEqual(size[1]);
+  }
+  await page.getByRole("button", { name: "Reset preview data" }).click();
+  await app.getByRole("searchbox", { name: "Equipment" }).fill("");
+  await expect(app.getByRole("cell", { name: "Projector" })).toBeVisible();
+  await expect(app.getByRole("cell", { name: "Tripod" })).toHaveCount(0);
+  await app.getByRole("row").filter({ hasText: "Projector" }).getByRole("button", { name: "Delete record" }).click();
+  await expect(app.getByRole("cell", { name: "Projector" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Reset preview data" }).click();
+  await expect(app.getByRole("cell", { name: "Projector" })).toBeVisible();
+});
+
+test("saved V1 artifacts still open in their original interactive preview", async ({ page }) => {
+  await page.goto("/");
+  const oldArtifact = {
+    format: "buildloop-app-v1", title: "Legacy reading list", summary: "A list saved by an earlier Studio version.",
+    blocks: [
+      { type: "heading", text: "Reading" },
+      { type: "collection", title: "Books", inputLabel: "Book title", addLabel: "Add book", emptyText: "No books yet", allowRemove: true, allowEdit: true, filterable: true },
+    ],
+    changeSummary: ["Added a list"], testTasks: ["Add a book"],
+  };
+  const oldProject = {
+    id: "legacy-v1-project", name: "Legacy reading list", user: "Readers", problem: "Remember books", why: "Keep a list", stage: "try",
+    features: [{ id: "list", text: "Track books", inV1: true }], behavior: "Readers can add books", constraints: "", instruction: "Keep a reading list",
+    brief: null, versions: [{ number: 1, instruction: "Build a list", builtAt: "2026-10-15T00:00:00.000Z", status: "complete", notes: "", tested: false, result: { provider: "deterministic", title: oldArtifact.title, description: oldArtifact.summary, instruction: "Build a list", artifact: oldArtifact } }],
+    observations: [], feedback: [], nextGoal: "", shareDecision: "", createdAt: "2026-10-15T00:00:00.000Z", updatedAt: "2026-10-15T00:00:00.000Z",
+  };
+  await page.evaluate((project) => localStorage.setItem("buildloop-studio-v1", JSON.stringify({ projects: [project], activeId: project.id, screen: "project" })), oldProject);
+  await page.reload();
+  const preview = page.frameLocator('iframe[title="Legacy reading list interactive preview"]');
+  await expect(preview.getByRole("heading", { name: "Legacy reading list" })).toBeVisible();
+  await preview.getByRole("textbox", { name: "Book title" }).fill("The Left Hand of Darkness");
+  await preview.getByRole("button", { name: "Add book" }).click();
+  await expect(preview.getByText("The Left Hand of Darkness")).toBeVisible();
 });
 
 test("Studio can create three immutable versions and reopen an older preview", async ({ page }) => {
@@ -142,6 +245,7 @@ test("Studio can create three immutable versions and reopen an older preview", a
   await page.getByRole("button", { name: "Preview Version 1" }).click();
   await expect(page.getByRole("heading", { name: "Version 1 preview" })).toBeVisible();
   await expect(page.getByTitle("Topic Tracker interactive preview")).toBeVisible();
+  await expect(page.frameLocator('iframe[title="Topic Tracker interactive preview"]').getByText("Plan kickoff")).toBeVisible();
   await page.getByRole("button", { name: "Close older preview" }).click();
   await expect(page.getByRole("heading", { name: "Version 1 preview" })).toHaveCount(0);
 });

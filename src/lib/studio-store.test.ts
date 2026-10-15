@@ -1,8 +1,18 @@
 import { describe, expect, it } from "vitest";
 import { createProject, recordBuild } from "./studio";
+import { v2Fixtures } from "./builder/v2";
 import { createStudioProject, migrateStudioProject, migrateStudioState, openStudioProject, updateStudioProject, getStudioState } from "./studio-store";
 
 describe("Studio v1 save compatibility", () => {
+  it("keeps a saved V1 artifact immutable in history after a V2 build", () => {
+    const v1 = { format: "buildloop-app-v1" as const, title: "Old list", summary: "A saved list", blocks: [{ type: "heading" as const, text: "Old list" }, { type: "collection" as const, title: "Tasks", inputLabel: "Task", addLabel: "Add", emptyText: "Empty", allowRemove: true, allowEdit: true, filterable: true }], changeSummary: ["Added list"], testTasks: ["Add a task"] };
+    const first = recordBuild(createProject({ name: "History", user: "Student", problem: "Track tasks", why: "Remember" }, "history"), { provider: "deterministic", title: v1.title, description: v1.summary, instruction: "Build a list", artifact: v1 });
+    const second = recordBuild(first, { provider: "deterministic", title: v2Fixtures[2].title, description: v2Fixtures[2].summary, instruction: "Add statuses", artifact: v2Fixtures[2] });
+    expect(second.versions.map((version) => version.number)).toEqual([1, 2]);
+    expect(second.versions[0].result.artifact).toEqual(v1);
+    expect(second.versions[1].result.artifact?.format).toBe("buildloop-app-v2");
+  });
+
   it("opens a project saved before generated artifacts and build states existed", () => {
     const legacy = recordBuild(createProject({ name: "Old project", user: "Students", problem: "They lose track of tasks", why: "They need a simple list" }, "legacy-1"), { provider: "demo", title: "Version 1", description: "Saved prototype concept", instruction: "Build a list" });
     const beforeGoalEight: Record<string, unknown> = { ...legacy };

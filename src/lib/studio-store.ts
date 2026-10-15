@@ -37,8 +37,8 @@ export function subscribeStudio(listener: () => void) { listeners.add(listener);
 function save(next: StudioState) {
   state = next;
   if (typeof window !== "undefined") {
-    try { const serialized = JSON.stringify(state); if (serialized.length > 480_000) throw new Error("limit"); window.localStorage.setItem(key, serialized); storageMessage = ""; }
-    catch { storageMessage = "This project is too large to save in this browser. Your current changes remain open, but remove an older version or clear browser storage before continuing."; }
+    try { const serialized = JSON.stringify(state); if (serialized.length > 2_000_000) throw new Error("limit"); window.localStorage.setItem(key, serialized); storageMessage = ""; }
+    catch { storageMessage = "Studio reached this browser’s 2 MB project history limit. Your current changes remain open, but remove an older version or clear browser storage before continuing."; }
   }
   listeners.forEach((listener) => listener());
 }
@@ -62,5 +62,9 @@ export function deleteStudioProject(id: string) {
   const current = getStudioState();
   const projects = current.projects.filter((project) => project.id !== id);
   save({ projects, activeId: current.activeId === id ? null : current.activeId, screen: current.activeId === id ? "hub" : current.screen });
+  if (typeof window !== "undefined") {
+    const prefix = `buildloop-runtime-v2:${encodeURIComponent(id)}:`;
+    try { for (let index = window.localStorage.length - 1; index >= 0; index -= 1) { const keyAtIndex = window.localStorage.key(index); if (keyAtIndex?.startsWith(prefix)) window.localStorage.removeItem(keyAtIndex); } } catch { /* Removing the project still succeeds if browser storage is unavailable. */ }
+  }
 }
 export function setStudioStage(id: string, stage: StudioStage) { updateStudioProject(id, (project) => ({ ...project, stage })); }

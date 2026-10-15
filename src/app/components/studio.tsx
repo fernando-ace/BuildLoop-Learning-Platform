@@ -19,6 +19,12 @@ function ProjectList({ projects }: { projects: StudioProject[] }) {
   </section>;
 }
 
+function ArtifactChanges({ items }: { items: string[] }) {
+  const groups = ["Added", "Changed", "Removed"].map((group) => ({ group, items: items.filter((item) => item.startsWith(group)) })).filter((group) => group.items.length);
+  const leftovers = items.filter((item) => !["Added", "Changed", "Removed"].some((group) => item.startsWith(group)));
+  return <div className="studio-artifact-changes">{groups.map(({ group, items: entries }) => <section key={group}><strong>{group}</strong>{entries.map((item) => <p key={item}>{item}</p>)}</section>)}{leftovers.map((item) => <p key={item}>{item}</p>)}</div>;
+}
+
 function V2PreviewFrame({ artifact, projectId, version }: { artifact: GeneratedAppV2; projectId: string; version: number }) {
   const frame = useRef<HTMLIFrameElement>(null);
   const storageKey = `buildloop-runtime-v2:${encodeURIComponent(projectId)}:${version}`;
@@ -33,18 +39,31 @@ function V2PreviewFrame({ artifact, projectId, version }: { artifact: GeneratedA
           const raw = window.localStorage.getItem(storageKey);
           const saved = raw ? JSON.parse(raw) as unknown : null;
           if (saved && typeof saved === "object" && !Array.isArray(saved)) {
-            const candidate = { ...artifact, collections: artifact.collections.map((collection) => ({ ...collection, seed: (saved as Record<string, unknown>)[collection.id] })) };
-            const checked = validateArtifactV2(candidate);
+            const candidate = { ...artifact, collections: artifact.collections.map((collection) => ({ ...collection, seed: (saved as Record<string, unknown>)[collection.id] ?? collection.seed ?? [] })) };
+            const checked = validateArtifactV2(candidate, 120_000);
             if (checked.ok) send("state", Object.fromEntries(checked.artifact.collections.map((collection) => [collection.id, collection.seed ?? []])));
             else send("state", null);
           } else send("state", null);
         } catch { send("state", null); }
       } else if (message.type === "save") {
-        const candidate = { ...artifact, collections: artifact.collections.map((collection) => ({ ...collection, seed: message.data?.[collection.id] })) };
-        const checked = validateArtifactV2(candidate);
+        const runtimeData = message.data && typeof message.data === "object" && !Array.isArray(message.data) ? message.data as Record<string, unknown> : null;
+        if (!runtimeData) { send("error", "Preview data could not be saved because its shape was invalid."); return; }
+        const candidate = { ...artifact, collections: artifact.collections.map((collection) => ({ ...collection, seed: runtimeData[collection.id] })) };
+        const checked = validateArtifactV2(candidate, 120_000);
         if (checked.ok) {
-          try { window.localStorage.setItem(storageKey, JSON.stringify(Object.fromEntries(checked.artifact.collections.map((collection) => [collection.id, collection.seed ?? []])))); } catch { /* Preview remains usable for this session if browser storage is full. */ }
-        }
+          const serialized = JSON.stringify(Object.fromEntries(checked.artifact.collections.map((collection) => [collection.id, collection.seed ?? []])));
+          try {
+            const runtimePrefix = `buildloop-runtime-v2:${encodeURIComponent(projectId)}:`;
+            let runtimeSize = 0;
+            for (let index = 0; index < window.localStorage.length; index += 1) {
+              const existingKey = window.localStorage.key(index);
+              if (existingKey?.startsWith(runtimePrefix)) runtimeSize += window.localStorage.getItem(existingKey)?.length ?? 0;
+            }
+            const previousSize = window.localStorage.getItem(storageKey)?.length ?? 0;
+          if (new TextEncoder().encode(serialized).length > 64_000 || runtimeSize - previousSize + serialized.length > 1_600_000) { send("error", "Preview data reached this browser’s local save limit. Remove some records before refreshing."); return; }
+            window.localStorage.setItem(storageKey, serialized);
+          } catch { send("error", "This browser could not save preview data. The current session remains open, but refreshing may lose recent changes."); }
+        } else send("error", "Preview data did not match this version’s field rules and was not saved.");
       }
     };
     window.addEventListener("message", onMessage);
@@ -130,9 +149,9 @@ export function Studio({ onBack, courseComplete }: { onBack: () => void; courseC
   } else if (project.stage === "try") {
     const latest = project.versions.at(-1)!;
     content = <>{heading("Try the app before asking for changes.", "Use it for a real task. Notice what worked, what felt confusing, and what surprised you.")}
-      <article className="studio-result"><span className="eyebrow">VERSION {latest.number} · {latest.result.provider === "deterministic" ? "DETERMINISTIC TEST BUILDER" : latest.result.provider === "openai" ? "AI BUILDER" : "LEGACY DEMO"}</span><h2>{latest.result.title}</h2><p>{latest.result.description}</p>{latest.result.artifact?.changeSummary.map((item) => <p key={item}>• {item}</p>)}<details><summary>Builder Brief used</summary><p>{latest.instruction}</p></details></article>
+      <article className="studio-result"><span className="eyebrow">VERSION {latest.number} · {latest.result.provider === "deterministic" ? "DETERMINISTIC TEST BUILDER" : latest.result.provider === "openai" ? "AI BUILDER" : "LEGACY DEMO"}</span><h2>{latest.result.title}</h2><p>{latest.result.description}</p>{latest.result.artifact && <ArtifactChanges items={latest.result.artifact.changeSummary} />}<details><summary>Builder Brief used</summary><p>{latest.instruction}</p></details></article>
       {latest.result.artifact ? preview(latest.result.artifact, latest.number) : <p className="studio-coach">This saved version was created before interactive previews were available.</p>}
-      {latest.result.artifact && <section className="studio-test-hint"><strong>Try a task</strong><ul>{latest.result.artifact.testTasks.map((task) => <li key={task}>{task}</li>)}</ul><p>Choose one of these or write your own task in your observation.</p></section>}
+      {latest.result.artifact && <section className="studio-test-hint"><strong>Try a task</strong><ul>{latest.result.artifact.testTasks.map((task) => <li key={task}><button className="text-button" type="button" onClick={() => setAction(task)}>{task}</button></li>)}</ul><p>Choose a suggestion or write your own task in your observation.</p></section>}
       {field("studio-version-notes", "A note for this version", latest.notes, (notes) => updateStudioProject(project.id, (current) => updateVersionNotes(current, notes)), "What do you want to remember about this build?")}
       <div className="studio-context"><span className="eyebrow">TRY CHECKLIST</span><p>Can someone {project.behavior || "complete the main task"}?</p><p>Does the result match your instruction? Did anything unexpected happen?</p></div>
       <section className="studio-test"><span className="eyebrow">TRY IT · VERSION {latest.number}</span><h2>What happened when you tried it?</h2>{field("studio-action", "What did you do?", action, setAction, "The steps you tried")}{field("studio-expected", "What did you expect?", expected, setExpected, "What should have happened?")}{field("studio-happened", "What happened instead?", happened, setHappened, "What did you see?")}</section>
@@ -150,7 +169,7 @@ export function Studio({ onBack, courseComplete }: { onBack: () => void; courseC
     const previousTest = latest.retestedVersion ? project.observations.find((item) => item.version === latest.retestedVersion && item.kind === "core") : undefined;
     content = <>{heading("Try it again, then check nearby behavior.", "Repeat the earlier task to see whether your change helped. Then check that something nearby still works.")}
       {previousTest && <section className="studio-context"><span className="eyebrow">REPEAT YOUR VERSION {previousTest.version} TASK</span><p>You tried: {previousTest.action}</p><p>You expected: {previousTest.expected}</p><p>Then: {previousTest.happened}</p></section>}
-      <article className="studio-result compact"><span className="eyebrow">VERSION {latest.number} · BUILDER CHANGE SUMMARY</span><p>{project.nextGoal}</p>{latest.result.artifact?.changeSummary.map((item) => <p key={item}>• {item}</p>)}{!latest.result.artifact && <p>{latest.result.description}</p>}</article>
+      <article className="studio-result compact"><span className="eyebrow">VERSION {latest.number} · BUILDER CHANGE SUMMARY</span><p>{project.nextGoal}</p>{latest.result.artifact ? <ArtifactChanges items={latest.result.artifact.changeSummary} /> : <p>{latest.result.description}</p>}</article>
       {latest.result.artifact && preview(latest.result.artifact, latest.number)}
       {field("studio-version-notes", "A note for this version", latest.notes, (notes) => updateStudioProject(project.id, (current) => updateVersionNotes(current, notes)), "What do you want to remember about this update?")}
       <section className="studio-test">{field("studio-retest-action", "Repeat: what did you do?", action, setAction, "Repeat the same steps as before")}{field("studio-retest-expected", "What did you expect this time?", expected, setExpected, "What should the change do?")}{field("studio-retest-happened", "What happened?", happened, setHappened, "What did you observe?")}{field("studio-nearby", "Check one nearby behavior", nearby, setNearby, "What else did you try, and did it still work?", true)}</section>

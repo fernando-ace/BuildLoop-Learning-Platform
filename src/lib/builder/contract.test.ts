@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { BuilderError, buildPrompt, validateArtifact, type GeneratedAppArtifact } from "./contract";
 import { deterministicBuilder, getBuilder, openAIBuilder } from "./provider";
-import { applyRuntimeAction, deriveMetric, seedRuntimeData, validateArtifactV2, v2Fixtures } from "./v2";
+import { applyRuntimeAction, deriveMetric, diffArtifacts, seedRuntimeData, validateArtifactV2, v2Fixtures } from "./v2";
 
 const base: GeneratedAppArtifact = { format: "buildloop-app-v1", title: "Club volunteer signup", summary: "A first version for volunteers", blocks: [{ type: "heading", text: "Volunteer shifts" }, { type: "text", text: "Pick a shift that works for you." }, { type: "collection", title: "Available shifts", inputLabel: "Your name and shift", addLabel: "Sign up", emptyText: "No signups yet", allowRemove: true, allowEdit: true, filterable: true }], changeSummary: ["Created an interactive signup list"], testTasks: ["Sign up for a shift", "Remove a signup"] };
 
@@ -73,6 +73,67 @@ describe("constrained BuildLoop app format", () => {
     expect(deriveMetric(added, tasks.metrics[0])).toBe(1);
     const removed = applyRuntimeAction(added, { id: "remove", label: "Remove", type: "delete", collection: "tasks" }, "tasks_2");
     expect(removed.tasks).toHaveLength(1);
+    const equipment = structuredClone(v2Fixtures[0]);
+    const quantity = equipment.collections[0].fields.find((field) => field.id === "quantity");
+    if (quantity?.type === "number") quantity.max = 4;
+    const bounded = applyRuntimeAction(seedRuntimeData(equipment), { id: "more", label: "Increase quantity", type: "increment", collection: "equipment", field: "quantity", amount: 1 }, "equipment_1", equipment);
+    expect(bounded.equipment[0].quantity).toBe(4);
+  });
+
+  it.each([
+    ["unsafe markup", (x: Record<string, unknown>) => { x.title = "<iframe src='https://bad.test'>"; }],
+    ["script tag", (x: Record<string, unknown>) => { x.summary = "<script>parent.location='bad'</script>"; }],
+    ["event handler text", (x: Record<string, unknown>) => { x.summary = "onclick=alert(1)"; }],
+    ["javascript URL", (x: Record<string, unknown>) => { x.testTasks = ["javascript:alert(1)"]; }],
+    ["unexpected artifact key", (x: Record<string, unknown>) => { x.render = "run"; }],
+    ["prototype property", (x: Record<string, unknown>) => { (x as Record<string, unknown>).__proto__ = { polluted: true }; }],
+    ["invalid screen id", (x: Record<string, unknown>) => { (x.screens as Array<Record<string, unknown>>)[0].id = "1tasks"; }],
+    ["missing collection reference", (x: Record<string, unknown>) => { (x.screens as Array<Record<string, unknown>>)[0].collection = "missing"; }],
+    ["missing screen target", (x: Record<string, unknown>) => { x.defaultScreen = "missing"; }],
+    ["too many seed records", (x: Record<string, unknown>) => { const c = (x.collections as Array<Record<string, unknown>>)[0]; c.seed = Array.from({ length: 101 }, () => ({ title: "x", status: "Todo" })); }],
+    ["invalid seed type", (x: Record<string, unknown>) => { (x.collections as Array<Record<string, unknown>>)[0].seed = [{ title: { nested: true }, status: "Todo" }]; }],
+    ["excessive action count", (x: Record<string, unknown>) => { x.actions = Array.from({ length: 41 }, (_, i) => ({ id: `go_${i}`, label: "Go", type: "navigate", screen: "tasks" })); }],
+    ["excessive screen count", (x: Record<string, unknown>) => { x.screens = Array.from({ length: 11 }, (_, i) => ({ id: `screen_${i}`, title: "Screen", view: "about" })); }],
+    ["oversized artifact", (x: Record<string, unknown>) => { x.summary = "x".repeat(49_000); }],
+    ["unknown nested property", (x: Record<string, unknown>) => { (x.screens as Array<Record<string, unknown>>)[0].onClick = "alert(1)"; }],
+    ["unsafe external image URL", (x: Record<string, unknown>) => { (x.testTasks as string[])[0] = "Show https://example.test/photo.png"; }],
+    ["missing field reference", (x: Record<string, unknown>) => { (x.screens as Array<Record<string, unknown>>)[0].primaryField = "missing"; }],
+    ["unsafe navigation target", (x: Record<string, unknown>) => { (x.navigation as Array<Record<string, unknown>>)[0].screen = "missing"; }],
+  ])("rejects V2 %s", (_name, mutate) => {
+    const fixture = structuredClone(v2Fixtures[2]) as unknown as Record<string, unknown>;
+    mutate(fixture);
+    expect(validateArtifactV2(fixture).ok).toBe(false);
+  });
+
+  it("rejects cyclic collection relationships and missing referenced seed records", () => {
+    const baseV2 = structuredClone(v2Fixtures[2]);
+    baseV2.collections[0].fields.push({ id: "project", label: "Project", type: "reference", collection: "projects" });
+    baseV2.collections.push({ id: "projects", label: "Projects", fields: [{ id: "task", label: "Task", type: "reference", collection: "tasks" }] });
+    expect(validateArtifactV2(baseV2).ok).toBe(false);
+    const linked = structuredClone(v2Fixtures[2]);
+    linked.collections[0].fields.push({ id: "project", label: "Project", type: "reference", collection: "tasks" });
+    linked.collections[0].seed![0].project = "missing";
+    expect(validateArtifactV2(linked).ok).toBe(false);
+  });
+
+  it("rejects cyclic JavaScript input before serialization or preview", () => {
+    const cyclic = structuredClone(v2Fixtures[2]) as unknown as Record<string, unknown>;
+    cyclic.self = cyclic;
+    expect(validateArtifactV2(cyclic).ok).toBe(false);
+  });
+
+  it("derives categorized structural changes from immutable V2 definitions", () => {
+    const before = structuredClone(v2Fixtures[2]);
+    const after = structuredClone(before);
+    after.screens.push({ id: "about", title: "About", view: "about" });
+    after.collections[0].fields.push({ id: "due_date", label: "Due date", type: "date" });
+    after.collections[0].fields = after.collections[0].fields.filter((field) => field.id !== "owner");
+    after.screens[0].filters = [{ field: "status", label: "To do", value: "Todo" }, { field: "priority", label: "High priority", value: "High" }];
+    const summary = diffArtifacts(before, after);
+    expect(summary).toContain("Added screen about");
+    expect(summary).toContain("Added field due_date");
+    expect(summary).toContain("Removed field owner");
+    expect(summary).toContain("Changed filters or search on tasks");
   });
 
   it("reports missing live configuration without calling a provider", async () => {
@@ -84,7 +145,9 @@ describe("constrained BuildLoop app format", () => {
   it("attempts exactly one automatic repair before reporting invalid output", async () => {
     vi.stubEnv("OPENAI_API_KEY", "test-key");
     const output = (value: unknown) => ({ output: [{ content: [{ type: "output_text", text: JSON.stringify(value) }] }] });
-    const fakeFetch = vi.fn().mockResolvedValueOnce(Response.json(output({ ...base, blocks: [{ type: "run-code", code: "alert(1)" }, ...base.blocks.slice(1)] }))).mockResolvedValueOnce(Response.json(output(base)));
+    const validV2 = v2Fixtures[2];
+    const invalidV2 = { ...validV2, defaultScreen: "missing" };
+    const fakeFetch = vi.fn().mockResolvedValueOnce(Response.json(output(invalidV2))).mockResolvedValueOnce(Response.json(output(validV2)));
     vi.stubGlobal("fetch", fakeFetch);
     try {
       const fixed = await openAIBuilder.generate(request);
@@ -95,7 +158,7 @@ describe("constrained BuildLoop app format", () => {
 
   it("stops after one failed repair", async () => {
     vi.stubEnv("OPENAI_API_KEY", "test-key");
-    const invalid = { ...base, blocks: [{ type: "run-code", code: "alert(1)" }, ...base.blocks.slice(1)] };
+    const invalid = { ...v2Fixtures[2], defaultScreen: "missing" };
     const fakeFetch = vi.fn().mockImplementation(() => Response.json({ output: [{ content: [{ type: "output_text", text: JSON.stringify(invalid) }] }] })); vi.stubGlobal("fetch", fakeFetch);
     try {
       await expect(openAIBuilder.generate(request)).rejects.toMatchObject({ code: "invalid_output" });
