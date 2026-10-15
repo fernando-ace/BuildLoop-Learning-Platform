@@ -1,66 +1,71 @@
-# BuildLoop — Guided Missions + BuildLoop Studio
+# BuildLoop
 
-BuildLoop teaches people to turn a real problem into a useful first version, test it, learn from feedback, and improve it. The product has two experiences: six guided Missions and BuildLoop Studio, where learners apply the same workflow to a project they choose.
+BuildLoop helps learners turn a real problem into a useful first version, try it, learn from evidence, and decide what to improve. It includes six guided Missions and BuildLoop Studio for applying the same workflow to an original project.
 
 ## Run locally
 
 ```sh
 npm install
+```
+
+Create `.env.local` in the repository root and add a server-only API key:
+
+```dotenv
+OPENAI_API_KEY=your_api_key
+# Optional: BUILDLOOP_OPENAI_MODEL=gpt-4.1-mini
+```
+
+Then run:
+
+```sh
 npm run dev
 ```
 
-The app is local-first. Mission progress is saved in browser storage; no account, backend, database, or real AI service is used.
+The API key is read only by the server Builder route. Do not prefix it with `NEXT_PUBLIC_` or commit `.env.local`. The default provider is the OpenAI Responses API. The default model is `gpt-4.1-mini`; set `BUILDLOOP_OPENAI_MODEL` to another Responses API model available to your account if needed. Studio makes no model calls while pages render; a request is made only after the learner starts or retries a build.
 
-## The learning loop
+When the key is missing, Studio preserves the project and shows a setup message. There is no silent demo success in the normal app. For deterministic browser testing, the Playwright server explicitly sets `BUILDLOOP_BUILDER_MODE=deterministic`; this is a test provider and is not the production path.
 
-The course follows a growing product-building loop: human judgment → clear goal → AI implementation → human testing → evidence → focused iteration → verification → decision. Each mission uses a different fictional product and deterministic Builder simulation.
+## Missions 1–6
 
-1. **The Missing Cameras:** understand a user’s problem and choose a useful first version.
-2. **The Vague Request:** turn a broad request into a clear goal and learn from feedback.
-3. **Build, Try, Improve:** treat building as a conversation; try the result and give a focused follow-up.
-4. **What Should We Build Next?:** use real feedback to choose what matters and judge whether the result is ready.
-5. **Something’s Broken:** reproduce a problem in ClubBoard, report what you expected and what happened, retest the Builder’s repair, and check that another club still works.
-6. **Build It for Real:** combine the course skills to help a campus event team manage volunteer shifts, test a focused first version, and make a ship decision from what happened.
-
-After Mission 6, the course completion screen invites learners to start an original project in Studio. Studio is also visible earlier from the Mission Hub, with a recommendation to complete the course first.
+The Missions teach product thinking through deterministic scenarios. They cover understanding a user and problem, narrowing Version 1, writing clear goals, learning from feedback, reporting and retesting bugs, checking nearby behavior, and making a shipping decision. Mission 6 transitions into Studio. Mission outcomes and skill feedback remain in the existing learner store; Studio does not rewrite or reset mission progress.
 
 ## BuildLoop Studio
 
-Studio guides a learner through their own idea: identify a user and problem, choose focused Version 1 scope and Later Ideas, write and inspect a Builder Brief, build, try it, record observations and another person's feedback, choose a behavior-focused next goal, build another version, retest, check nearby behavior, and make a share decision. Learners can revise their project details, resume multiple projects, review build history, and delete a project after confirming.
+Studio guides a learner through an original idea, Version 1 scope and Later Ideas, a structured Builder Brief, an executable first build, explicit try tasks, observations, feedback, a focused next goal, another build, retesting, version history, and reflection. The learner remains responsible for choosing the user, scope, goal, and whether the app works.
 
-Studio business concepts live in `src/lib/studio.ts`, separately from React. `src/lib/studio-store.ts` persists Studio under `buildloop-studio-v1` in browser local storage. It does not change the existing `buildloop-learner-v2` mission record or its `buildloop-mission-v1` migration. The store boundary can later be replaced with account-backed storage without rewriting the project workflow.
+The Builder returns a constrained `buildloop-app-v2` artifact rather than a repository or arbitrary code. V2 supports named screens with trusted navigation; typed record collections; list, table, card, and detail views; search and enum filters; create and edit forms; safe record actions; and small derived counters. This supports useful small apps such as equipment inventories, volunteer shift managers, task trackers, and lost-and-found boards. V1 artifacts already in project history still open in the V1 interpreter.
 
-The Builder boundary is `BuilderProvider`. The current `demoBuilder` is local and simulated: it returns a text prototype concept based on the learner's instruction. It does not call an AI service, generate executable application code, or deploy a working app. No external Builder credentials were found or integrated for this milestone. To connect a real Builder, implement the provider contract in a server-side adapter, map its completed/failed results to the existing version model, keep credentials out of browser code and saves, and inject that provider at the build boundary. The deterministic engines for Missions 1–6 remain unchanged.
+Generated versions, history, observations, and feedback are saved locally under `buildloop-studio-v1`. Runtime records live separately under project and version keyed `buildloop-runtime-v2` snapshots. When a new V2 version opens, a deterministic migration compares stable collection and field IDs, plans changes, preserves compatible data, applies valid defaults, and reports destructive or incompatible changes. Every version retains its own runtime snapshot, so older versions reopen with their historical data. Learners can reset a preview to its original seed and defaults. Missions remain in their existing store. V2 artifacts are capped at 48 KB, seed collections at 100 records, each version's runtime data at 64 KB, and Studio history at 2 MB and 20 versions. Runtime data across a project is capped at 1.6 MB. A refresh during a build marks that build failed and preserves the project for retry. Learner data stays in that browser; it is included in a provider request only when the learner asks to build, and only the current project context is sent.
 
-Mission 5’s Builder behaves deterministically. A clear report fixes the membership display on the first build. A vague report misses the display issue, while an implementation guess changes the seat-count behavior and causes another club’s seat count to stop updating. Learners can report what they observe, receive a second build, repeat the original actions, and check Robotics Club before deciding whether to share.
+Studio now supports iterative declarative app evolution, compatible runtime-data preservation, structured schema comparison and migration planning, version-local historical state, and safe handling of incompatible values. Existing V1 apps and V2 artifacts remain readable; legacy V2 runtime maps are upgraded on their next save.
 
-Mission scenarios, deterministic build outcomes, and skill scoring live in `src/lib/missions/`. Mission state is saved with the shared local progress record in [store.ts](src/lib/store.ts). Each mission has its own screen; Mission 6 adds optional fields to the existing save record and does not change its key, so earlier learner progress remains available.
+See [docs/BUILDER-ARCHITECTURE.md](docs/BUILDER-ARCHITECTURE.md) for the provider boundary, artifact format, preview sandbox, validation, privacy and current limitations.
 
-## Product decisions
+## Deterministic Builder mode
 
-- Product evidence guides choices, while weaker but playable paths still show realistic consequences.
-- The simulated Builder is deterministic: the same choices produce the same result.
-- Learners try the product after a build, repeat the same steps after a repair, and check a nearby behavior before deciding.
-- Reports work best when they describe the action, expected result, and actual result; learners do not need to guess how the app was built.
-- Scores explain which choices they reflect instead of awarding generic XP.
+The test provider returns stable, interactive artifacts without network calls or API credits. It is selected by `BUILDLOOP_BUILDER_MODE=deterministic` on the server. Unit tests call it directly; the Playwright web server sets it in `playwright.config.ts`. It is labeled **Deterministic Test Builder** in Studio. The legacy `demo` result shape remains readable for versions already saved before interactive apps were introduced; it is not a provider for new builds.
 
 ## Validation
 
-- `npm run lint` — ESLint
-- `npm run typecheck` — TypeScript
-- `npm test` — Vitest unit coverage
-- `npm run build` — optimized Next.js build
-- `npm run test:e2e` (after `npm run build`) — Chromium coverage of mission progression and completion, including desktop and 390px mobile layouts against the production server
-- Studio unit tests cover idea coaching, Builder Brief inspection, version lifecycle, observations, feedback, iteration goals, and project reflection. Studio Chromium journeys cover build → try → feedback → Version 2 → retest, refresh/resume, coaching, and 390px/1440px overflow checks.
-- `npm audit` — dependency audit
+```sh
+npm run typecheck
+npm run lint
+npm test
+npm run build
+npm run test:e2e
+```
 
-## Known limits
+The Chromium suite covers all six Missions and Studio creation, brief coaching, a successful interactive build and test, feedback, iteration, retesting, a four-version migration chain, incompatible-change warnings, historical snapshots, older-version previews, failure and retry, unsafe output rejection, refresh/resume, and responsive overflow at phone and desktop sizes. E2E runs use the deterministic server provider and never call the live model.
 
-- The build handoff is deterministic simulation, not a real model or code generator.
-- The equipment tracker is an in-experience prototype with fictional seed data. It is not connected to a real club inventory.
-- Progress is stored in one browser and has no account sync or teacher view.
-- Scores are transparent formative feedback, not a validated measure of a learner's long-term ability.
+## Current limitations
 
-## Recommended real-user experiment
-
-Observe teenagers aged 13–18 completing the six-mission course without coaching. Ask them to think aloud, then ask how they decided what to build, what they learned from a failed check, and what evidence they wanted before sharing. Track time by mission, skipped checks, confusing controls, and whether they distinguish what they saw from guesses about how the app works. Use those observations to revise the course.
+- Generated apps use the fixed data, action, and screen model described above; arbitrary software is not supported.
+- Generated apps still cannot run arbitrary JavaScript, custom backend logic, cloud databases, authentication, multiplayer, external APIs, deployment, or arbitrary npm packages.
+- Reference fields support one-way links between collections; this is not a general relational database.
+- The deterministic provider is a regression fixture selector, not evidence that a live model can design every brief well.
+- Data is local to one browser with no account sync, sharing, or teacher view.
+- The live server provider keeps a process-local cap of five builds per minute per forwarded client address. The zero-cost deterministic test provider skips that cap. Production deployments with multiple instances should add a shared rate limiter before exposing paid generation broadly.
+- The Builder accepts up to 20 versions per project in this milestone.
+- OpenAI live generation requires a valid API key, enabled Responses API access, and a supported model. Deterministic test success is not evidence of live provider availability.
+- Learner-generated app changes are summarized from validated artifact structure, not semantic correctness.
+- Mission scores are formative feedback, not a validated measurement of long-term ability.
