@@ -97,7 +97,9 @@ test("strong full project completes, persists, replays, and shows course complet
   expect(saved.mission6Progress.bestSkillResults.find((skill: { name: string }) => skill.name === "Testing")?.score).toBe(100);
   await noHorizontalOverflow(page, 390);
   await noHorizontalOverflow(page, 1440);
-  await page.getByRole("button", { name: "Return to Missions" }).click();
+  await page.getByRole("button", { name: "Start your own project" }).click();
+  await expect(page.getByRole("heading", { name: "What would you like to make easier?" })).toBeVisible();
+  await page.getByRole("button", { name: "Back to Missions" }).click();
   await expect(page.getByText("All six missions complete")).toBeVisible();
   await expect(page.getByText("COURSE COMPLETE")).toBeVisible();
   await page.getByRole("article", { name: "Mission 6" }).getByRole("button", { name: "Replay Mission" }).click();

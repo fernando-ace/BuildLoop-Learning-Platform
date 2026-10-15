@@ -40,7 +40,7 @@ function Header({ state }: { state: Mission6State }) {
   return <header className="m2-topbar m5-topbar m6-topbar"><div className="brand">build<span>loop</span><i /></div><div className="m2-top-title">Mission 6 <span>·</span> {mission6Definition.title}</div><span className="m2-save"><i/> Saved</span><nav className="m5-progress" aria-label="Mission progress">{mission6Definition.steps.map((label, index) => <span key={label} className={index < current || state.stage === 11 ? "is-done" : index === current ? "is-current" : ""}><i>{index < current || state.stage === 11 ? "✓" : index + 1}</i><small>{label}</small></span>)}</nav></header>;
 }
 
-export function MissionSixPlayer({ state, progress, courseSkills }: { state: Mission6State; progress: Mission6Progress; courseSkills: { name: string; score: number }[] }) {
+export function MissionSixPlayer({ state, progress, courseSkills, onStartStudio }: { state: Mission6State; progress: Mission6Progress; courseSkills: { name: string; score: number }[]; onStartStudio: () => void }) {
   const dispatch = dispatchMission6;
   const build = mission6Build(state);
   const retest = mission6RetestPassed(state);
@@ -113,7 +113,8 @@ export function MissionSixPlayer({ state, progress, courseSkills }: { state: Mis
         <section className="m3-summary m5-summary"><span className="eyebrow">BUILDER SUMMARY</span>{[["UNDERSTANDING", summary.investigation], ["VERSION 1", summary.version], ["YOUR INSTRUCTION", summary.instruction], ["FIRST TRY", summary.firstTry], ["FEEDBACK", summary.feedback.join(" · ") || "No comments selected"], ["NEXT GOAL", summary.goal], ["BUILDER FOLLOW-UP", summary.followUp], ["BUILDER UPDATE", summary.builder], ["REPEAT THE TASK", summary.retest], ["NEARBY TASK", summary.nearby], ["YOUR DECISION", summary.decision]].map(([label, value]) => <div className="m3-summary-item" key={label}><span>{label}</span><p>{value}</p></div>)}</section>
         <section className="m2-skill-results"><h2>Builder skills</h2>{mission6Scores(state).map((skill) => { const best = progress.bestSkillResults.find((item) => item.name === skill.name)?.score ?? skill.score; return <div key={skill.name}><div><strong>{skill.name}</strong><span>Latest {skill.score}/100 · Best {best}/100 · {skillLabel(skill.score)}</span></div><div className="skill-track"><span style={{ width: `${skill.score}%` }}/></div><p>{skill.explanation}</p></div>; })}</section>
         {progress.attempts.length > 1 && <details className="m4-history"><summary>Previous Mission 6 attempts ({progress.attempts.length - 1})</summary>{progress.attempts.slice(0, -1).map((item) => <p key={item.number}>Attempt {item.number}: {item.summary.decision}</p>)}</details>}
-        <div className="m2-continue"><span>Saved on this device</span><button className="button button-primary" type="button" onClick={() => dispatch({ type: "RETURN" })}>Return to Missions</button><button className="button button-quiet" type="button" onClick={() => dispatch({ type: "START" })}>Replay Mission 6</button></div>
+        <div className="m6-studio-finish"><span className="eyebrow">YOUR NEXT STEP</span><h2>You practiced the workflow. Now use it on something you care about.</h2><button className="button button-primary" type="button" onClick={onStartStudio}>Start your own project →</button></div>
+        <div className="m2-continue"><span>Saved on this device</span><button className="button button-quiet" type="button" onClick={() => dispatch({ type: "RETURN" })}>Return to Missions</button><button className="button button-quiet" type="button" onClick={() => dispatch({ type: "START" })}>Replay Mission 6</button></div>
       </>}
     </main>
   </div>;
