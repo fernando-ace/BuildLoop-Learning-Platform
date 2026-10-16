@@ -8,20 +8,25 @@ BuildLoop helps learners turn a real problem into a useful first version, try it
 npm install
 ```
 
-Create `.env.local` in the repository root and add a server-only API key:
+Create `.env.local` in the repository root and configure PostgreSQL and Better Auth:
 
 ```dotenv
+DATABASE_URL=postgresql://buildloop:password@localhost:5432/buildloop
+BETTER_AUTH_SECRET=replace-with-a-random-secret-of-at-least-32-characters
+BETTER_AUTH_URL=http://localhost:3000
+PUBLIC_APP_URL=http://localhost:3000
+# Optional live Builder access:
 OPENAI_API_KEY=your_api_key
-# Optional: BUILDLOOP_OPENAI_MODEL=gpt-4.1-mini
 ```
 
 Then run:
 
 ```sh
+npm run db:migrate
 npm run dev
 ```
 
-The API key is read only by the server Builder route. Do not prefix it with `NEXT_PUBLIC_` or commit `.env.local`. The default provider is the OpenAI Responses API. The default model is `gpt-4.1-mini`; set `BUILDLOOP_OPENAI_MODEL` to another Responses API model available to your account if needed. Studio makes no model calls while pages render; a request is made only after the learner starts or retries a build.
+Database credentials, auth secrets, and the optional API key are server-only. Do not prefix them with `NEXT_PUBLIC_` or commit `.env.local`. Studio makes no model calls while pages render; a request is made only after the learner starts or retries a build.
 
 When the key is missing, Studio preserves the project and shows a setup message. There is no silent demo success in the normal app. For deterministic browser testing, the Playwright server explicitly sets `BUILDLOOP_BUILDER_MODE=deterministic`; this is a test provider and is not the production path.
 
@@ -35,7 +40,9 @@ Studio guides a learner through an original idea, Version 1 scope and Later Idea
 
 The Builder returns a constrained `buildloop-app-v2`, `buildloop-app-v3`, or `buildloop-app-v4` artifact rather than a repository or arbitrary code. V2 supports named screens, typed collections, forms, safe actions, and derived counters. V3 adds relational links, constraints, computed values, and workflows. V4 adds test personas, roles, ownership checks, field visibility, and workflow permissions for apps that need different actions for different users. Existing V1 artifacts still open in the V1 interpreter.
 
-Generated versions, history, observations, and feedback are saved locally under `buildloop-studio-v1`. V2/V3 preview records live separately under project and version keyed browser snapshots. V4 can publish a role-based app to a local SQLite database at `.buildloop-data/shared.sqlite` (or the server-only `BUILDLOOP_SHARED_DB_PATH`). Published records are shared across browser sessions on that one server host, and app/version IDs keep them separate from Builder history. Publishing and rollback migrate the latest shared records transactionally and require review for permission widening or destructive schema changes. Each mutation is checked against server-held schema and a signed demo identity, then saved together with its audit entry. Mission data is unchanged. The shared record cap is 500 per collection; V4 artifacts are capped at 110 KB, with bounded roles, test users, permissions, and ownership expressions. This local runtime requires persistent writable disk and Node's built-in experimental `node:sqlite` in Node 22. It is not a multi-instance cloud service.
+Studio creates an account-owned application in PostgreSQL before building. V4 artifacts are saved as immutable versions; preview and production have separate version pointers and runtime records. Publishing uses an explicitly selected saved version, validates migration safety, and updates records, migration history, publication history, and audit events in a transaction. Safe rollback uses the same checks. Platform roles (owner, administrator, member) are separate from generated app roles. Invitations store hashed tokens, require a signed-in account, and can be revoked; invitations are shared as copied links rather than email.
+
+The learner's Mission progress and detailed Studio notes remain in the existing browser store. PostgreSQL owns app accounts, memberships, generated versions, preview/production runtime data, invitations, and publication/audit history. See [docs/PLATFORM.md](docs/PLATFORM.md) for setup, schema, migration workflow, and current limits.
 
 Studio now supports iterative declarative app evolution, compatible runtime-data preservation, structured schema comparison and migration planning, version-local historical state, and safe handling of incompatible values. Existing V1 apps and V2 artifacts remain readable; legacy V2 runtime maps are upgraded on their next save.
 
@@ -60,10 +67,10 @@ The Chromium suite covers all six Missions and Studio creation, brief coaching, 
 ## Current limitations
 
 - Generated apps use the fixed data, action, and screen model described above; arbitrary software is not supported.
-- Generated apps still cannot run arbitrary JavaScript, custom backend logic, cloud databases, verified authentication, realtime multiplayer, external APIs, deployment, or arbitrary npm packages. V4 demo personas are selectable by any visitor and must never be used for real personal or sensitive data.
+- Generated apps still cannot run arbitrary JavaScript, custom backend logic, realtime multiplayer, external APIs, deployment, or arbitrary npm packages. Test personas are limited to local Studio role previews; published app access uses real signed-in accounts and memberships.
 - Reference fields support one-way links between collections; this is not a general relational database.
 - The deterministic provider is a regression fixture selector, not evidence that a live model can design every brief well.
-- V1-V3 preview data stays local to one browser. V4 published data is shared across sessions that reach the same local server database; it has no real account sync, identity provider, realtime delivery, or teacher view. Deployments must add persistent shared transactional storage and real authentication before multi-host or production use.
+- Mission state and Studio notes remain local to one browser and do not sync across devices. Platform data is PostgreSQL-backed and shareable across hosts that use the same database. This work did not deploy or verify a hosted production environment.
 - The live server provider keeps a process-local cap of five builds per minute per forwarded client address. The zero-cost deterministic test provider skips that cap. Production deployments with multiple instances should add a shared rate limiter before exposing paid generation broadly.
 - The Builder accepts up to 20 versions per project in this milestone.
 - OpenAI live generation requires a valid API key, enabled Responses API access, and a supported model. Deterministic test success is not evidence of live provider availability.
