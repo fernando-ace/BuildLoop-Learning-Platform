@@ -356,6 +356,19 @@ export class PlatformRepository {
     });
   }
 
+  async changePlatformRole(user: PlatformIdentity, appId: string, memberId: string, platformRole: "administrator" | "member") {
+    if (memberId === user.id) throw new PlatformError("forbidden", "You cannot change your own platform role.");
+    await transaction(async (client) => {
+      const access = await membership(client, user.id, appId, true);
+      if (access.platform_role !== "owner") throw new PlatformError("forbidden", "Only the app owner can change platform administrator access.");
+      const target = await client.query<{ platform_role: PlatformRole }>("SELECT platform_role FROM application_memberships WHERE app_id=$1 AND user_id=$2 FOR UPDATE", [appId, memberId]);
+      if (!target.rowCount) throw new PlatformError("not_found", "That member is no longer part of this app.");
+      if (target.rows[0].platform_role === "owner") throw new PlatformError("conflict", "Transfer ownership before changing the owner's platform role.");
+      await client.query("UPDATE application_memberships SET platform_role=$3 WHERE app_id=$1 AND user_id=$2", [appId, memberId, platformRole]);
+      await writeAudit(client, appId, user.id, "membership.platform_role_changed", memberId, { platformRole });
+    });
+  }
+
   async removeMember(user: PlatformIdentity, appId: string, memberId: string) {
     await transaction(async (client) => {
       const access = await membership(client, user.id, appId, true);

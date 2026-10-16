@@ -17,9 +17,10 @@ export async function PATCH(request: Request, context: Context) {
   try {
     const user = await requireIdentity(request);
     const body = await readJson(request, 4_000);
-    if (!isRecord(body) || typeof body.memberId !== "string" || typeof body.appRole !== "string") return Response.json({ error: "Choose a member and app role." }, { status: 400 });
+    if (!isRecord(body) || typeof body.memberId !== "string" || (typeof body.appRole !== "string" && body.platformRole !== "administrator" && body.platformRole !== "member")) return Response.json({ error: "Choose a member and a role." }, { status: 400 });
     const { appId } = await context.params;
-    await getPlatformRepository().changeAppRole(user, appId, body.memberId, body.appRole);
+    if (body.platformRole === "administrator" || body.platformRole === "member") await getPlatformRepository().changePlatformRole(user, appId, body.memberId, body.platformRole);
+    else await getPlatformRepository().changeAppRole(user, appId, body.memberId, body.appRole as string);
     return Response.json({ ok: true }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) { return responseForPlatformError(error); }
 }

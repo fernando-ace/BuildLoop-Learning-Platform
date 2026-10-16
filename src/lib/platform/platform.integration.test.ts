@@ -86,6 +86,9 @@ describe.skipIf(!enabled)("PostgreSQL platform repository", () => {
     expect((await pool().query("SELECT status FROM app_invitations WHERE id=$1", [expired.id])).rows[0].status).toBe("expired");
     const active = await repository.createInvitation(owner, app.id, "coordinator", nextOwner.email);
     await repository.acceptInvitation(nextOwner, active.token);
+    await repository.changePlatformRole(owner, app.id, nextOwner.id, "administrator");
+    expect((await repository.listMembers(owner.id, app.id)).find((item) => item.id === nextOwner.id)).toMatchObject({ platformRole: "administrator", appRole: "coordinator" });
+    await expect(repository.changePlatformRole(nextOwner, app.id, owner.id, "member")).rejects.toMatchObject({ code: "forbidden" });
     await repository.transferOwnership(owner, app.id, nextOwner.id);
     await expect(repository.transferOwnership(owner, app.id, nextOwner.id)).rejects.toMatchObject({ code: "forbidden" });
     await expect(repository.changeAppRole(nextOwner, app.id, nextOwner.id, "volunteer")).rejects.toMatchObject({ code: "forbidden" });
