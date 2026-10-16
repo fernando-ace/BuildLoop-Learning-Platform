@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { volunteerCoordinationV4 } from "../src/lib/builder/v4-fixtures";
 
 async function startProject(page: Page, checkEntryResponsive = false, details = { name: "Topic Tracker", user: "Students who study after school", problem: "They lose track of which topics need more practice before a test", why: "They want to use their study time well" }) {
   await page.goto("/");
@@ -499,4 +500,39 @@ test("Studio never previews an unsafe generated artifact", async ({ page }) => {
   await page.getByRole("button", { name: "Build Version 1" }).click();
   await expect(page.locator(".studio-build-error[role=alert]")).toContainText("could not safely run");
   await expect(page.locator("iframe")).toHaveCount(0);
+});
+
+test("V4 published app shares authorized records across demo identities", async ({ page }) => {
+  const appId = `goal12-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const response = await page.request.post(`/api/apps/${appId}/publish`, { headers: { origin: "http://127.0.0.1:3107" }, data: { action: "publish", versionNumber: 1, artifact: volunteerCoordinationV4 } });
+  const publication = await response.json();
+  expect(response.ok(), JSON.stringify(publication)).toBeTruthy();
+  expect(publication.published).toBe(true);
+
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.goto(`/apps/${appId}`);
+  await expect(page.getByRole("heading", { name: "Campus Volunteer Operations" })).toBeVisible();
+  await page.getByRole("button", { name: /Riley Chen/ }).click();
+  const registrations = page.locator(".published-collection").filter({ has: page.getByRole("heading", { name: "Registrations" }) });
+  await expect(registrations.getByText("No records are visible to this role.")).toBeVisible();
+  const shifts = page.locator(".published-collection").filter({ has: page.getByRole("heading", { name: "Shifts" }) });
+  await shifts.getByRole("button", { name: "register volunteer" }).click();
+  await expect(page.getByRole("status")).toContainText("Saved");
+  await expect(registrations.getByText("1 visible record")).toBeVisible();
+
+  await page.getByLabel("Using this app as").selectOption("vol_ada");
+  await expect(registrations.getByText("1 visible record")).toBeVisible();
+  await page.getByLabel("Using this app as").selectOption("vol_coordinator");
+  await expect(registrations.getByText("2 visible records")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Recent activity" })).toBeVisible();
+  await page.reload();
+  await expect(page.locator(".published-collection").filter({ has: page.getByRole("heading", { name: "Registrations" }) }).getByText("2 visible records")).toBeVisible();
+
+  for (const width of [390, 430, 768, 1440]) {
+    await page.setViewportSize({ width, height: 950 });
+    const size = await page.evaluate(() => [document.documentElement.scrollWidth, document.documentElement.clientWidth]);
+    expect(size[0], `published app horizontal overflow at ${width}px`).toBeLessThanOrEqual(size[1]);
+  }
+  expect(errors).toEqual([]);
 });

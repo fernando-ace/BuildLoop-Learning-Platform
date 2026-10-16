@@ -10,6 +10,10 @@ import { describeSchemaChanges, diffApplicationSchemas } from "@/lib/builder/sch
 import { describeV3SchemaChanges, diffV2ToV3, diffV3ApplicationSchemas } from "@/lib/builder/schema-diff-v3";
 import type { GeneratedAppV3 } from "@/lib/builder/v3";
 import { StudioV3Preview } from "@/app/components/studio-v3-preview";
+import { StudioV4Preview } from "@/app/components/studio-v4-preview";
+import { StudioV4Publish } from "@/app/components/studio-v4-publish";
+import { diffV4ApplicationSchemas } from "@/lib/builder/schema-diff-v4";
+import type { GeneratedAppV4 } from "@/lib/builder/v4";
 import type { StudioMigrationProvenance } from "@/lib/studio";
 import { createStudioProject, deleteStudioProject, getServerStudioState, getStudioState, getStudioStorageMessage, openStudioProject, setStudioStage, showStudioHub, subscribeStudio, updateStudioProject } from "@/lib/studio-store";
 
@@ -33,6 +37,11 @@ function ArtifactChanges({ items }: { items: string[] }) {
 
 function SchemaComparison({ before, after }: { before: StudioProject["versions"][number]; after: StudioProject["versions"][number] }) {
   const oldArtifact = before.result.artifact, newArtifact = after.result.artifact;
+  const v4Changes = oldArtifact?.format === "buildloop-app-v4" && newArtifact?.format === "buildloop-app-v4" ? diffV4ApplicationSchemas(oldArtifact, newArtifact) : [];
+  if (oldArtifact?.format === "buildloop-app-v4" || newArtifact?.format === "buildloop-app-v4") return <details className="studio-version-comparison"><summary>Compare Version {before.number} with Version {after.number}</summary>
+    {oldArtifact?.format === "buildloop-app-v4" && newArtifact?.format === "buildloop-app-v4" && v4Changes.length ? <ul>{v4Changes.map((change, index) => <li key={`${change.kind}-${index}`}><strong>{change.risk === "security" || change.risk === "destructive" ? "Permission change: " : ""}</strong>{change.label}</li>)}</ul> : oldArtifact?.format !== "buildloop-app-v4" && newArtifact?.format === "buildloop-app-v4" ? <p>This version adds app users, roles, and server-checked permissions. Existing data will be reviewed when you publish it.</p> : <p>No role or permission changes were found between these versions.</p>}
+    {(oldArtifact?.format === "buildloop-app-v4" && newArtifact?.format === "buildloop-app-v4" ? v4Changes : []).some((change) => change.risk === "security" || change.risk === "destructive") && <p role="status">Review the access changes before publishing.</p>}
+  </details>;
   const relationalChanges = oldArtifact?.format === "buildloop-app-v3" && newArtifact?.format === "buildloop-app-v3" ? diffV3ApplicationSchemas(oldArtifact, newArtifact) : oldArtifact?.format === "buildloop-app-v2" && newArtifact?.format === "buildloop-app-v3" ? diffV2ToV3(oldArtifact, newArtifact) : [];
   const changes = oldArtifact?.format === "buildloop-app-v2" && newArtifact?.format === "buildloop-app-v2" ? diffApplicationSchemas(oldArtifact, newArtifact) : [];
   if (relationalChanges.length || oldArtifact?.format === "buildloop-app-v3" || newArtifact?.format === "buildloop-app-v3") return <details className="studio-version-comparison"><summary>Compare Version {before.number} with Version {after.number}</summary>
@@ -200,6 +209,7 @@ export function Studio({ onBack, courseComplete }: { onBack: () => void; courseC
   const heading = (title: string, description: string) => <div className="studio-heading"><span className="eyebrow">{project.name} · {labels[project.stage].toUpperCase()}</span><h1>{title}</h1><p>{description}</p></div>;
   const continueButton = (label: string, onClick: () => void, disabled = false) => <div className="studio-actions"><button className="button button-primary" onClick={onClick} disabled={disabled} type="button">{label} →</button></div>;
   const preview = (artifact: import("@/lib/builder/contract").GeneratedApp, version: number) => {
+    if (artifact.format === "buildloop-app-v4") return <StudioV4Preview key={`${project.id}-${version}`} artifact={artifact} version={version} />;
     if (artifact.format === "buildloop-app-v3") {
       const source = project.versions.find((item) => item.number === version - 1)?.result.artifact;
       const previousArtifact = source?.format === "buildloop-app-v2" || source?.format === "buildloop-app-v3" ? source : undefined;
@@ -233,6 +243,7 @@ export function Studio({ onBack, courseComplete }: { onBack: () => void; courseC
     content = <>{heading("Try the app before asking for changes.", "Use it for a real task. Notice what worked, what felt confusing, and what surprised you.")}
       <article className="studio-result"><span className="eyebrow">VERSION {latest.number} · {latest.result.provider === "deterministic" ? "DETERMINISTIC TEST BUILDER" : latest.result.provider === "openai" ? "AI BUILDER" : "LEGACY DEMO"}</span><h2>{latest.result.title}</h2><p>{latest.result.description}</p>{project.versions.length > 1 && latest.result.artifact?.format === "buildloop-app-v2" && project.versions.at(-2)?.result.artifact?.format === "buildloop-app-v2" ? <ArtifactChanges items={describeSchemaChanges(diffApplicationSchemas(project.versions.at(-2)!.result.artifact as GeneratedAppV2, latest.result.artifact))} /> : latest.result.artifact && <ArtifactChanges items={latest.result.artifact.changeSummary} />}{latest.migration && <MigrationSummary migration={latest.migration} />}<details><summary>Builder Brief used</summary><p>{latest.instruction}</p></details></article>
       {latest.result.artifact ? preview(latest.result.artifact, latest.number) : <p className="studio-coach">This saved version was created before interactive previews were available.</p>}
+      {latest.result.artifact?.format === "buildloop-app-v4" && <StudioV4Publish appId={project.id} versionNumber={latest.number} artifact={latest.result.artifact as GeneratedAppV4} />}
       {latest.result.artifact && <section className="studio-test-hint"><strong>Try a task</strong><ul>{latest.result.artifact.testTasks.map((task) => <li key={task}><button className="text-button" type="button" onClick={() => setAction(task)}>{task}</button></li>)}</ul><p>Choose a suggestion or write your own task in your observation.</p></section>}
       {field("studio-version-notes", "A note for this version", latest.notes, (notes) => updateStudioProject(project.id, (current) => updateVersionNotes(current, notes)), "What do you want to remember about this build?")}
       <div className="studio-context"><span className="eyebrow">TRY CHECKLIST</span><p>Can someone {project.behavior || "complete the main task"}?</p><p>Does the result match your instruction? Did anything unexpected happen?</p></div>
@@ -255,6 +266,7 @@ export function Studio({ onBack, courseComplete }: { onBack: () => void; courseC
       {latest.migration && <MigrationSummary migration={latest.migration} />}
       {project.versions.length > 1 && <SchemaComparison before={project.versions.at(-2)!} after={latest} />}
       {latest.result.artifact && preview(latest.result.artifact, latest.number)}
+      {latest.result.artifact?.format === "buildloop-app-v4" && <StudioV4Publish appId={project.id} versionNumber={latest.number} artifact={latest.result.artifact as GeneratedAppV4} />}
       {field("studio-version-notes", "A note for this version", latest.notes, (notes) => updateStudioProject(project.id, (current) => updateVersionNotes(current, notes)), "What do you want to remember about this update?")}
       <section className="studio-test">{field("studio-retest-action", "Repeat: what did you do?", action, setAction, "Repeat the same steps as before")}{field("studio-retest-expected", "What did you expect this time?", expected, setExpected, "What should the change do?")}{field("studio-retest-happened", "What happened?", happened, setHappened, "What did you observe?")}{field("studio-nearby", "Check one nearby behavior", nearby, setNearby, "What else did you try, and did it still work?", true)}</section>
       {continueButton("See your project summary", () => { updateStudioProject(project.id, (current) => ({ ...recordObservation(recordObservation(current, { action, expected, happened, kind: "core" }), { action: "Nearby check", expected: "Working behavior stays intact", happened: nearby, kind: "nearby" }), stage: "summary" })); }, !action.trim() || !nearby.trim())}</>;
