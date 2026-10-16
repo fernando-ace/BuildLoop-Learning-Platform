@@ -149,6 +149,35 @@ test("Studio supports build, try, feedback, iteration, retest, summary, and refr
   expect(errors).toEqual([]);
 });
 
+test("V3 relational preview links records and runs a capacity-checked workflow", async ({ page }) => {
+  test.setTimeout(90_000);
+  await startProject(page, false, { name: "Volunteer Shift Planner", user: "Campus volunteers", problem: "Connect events, shifts, volunteers, and registrations", why: "Keep signups within shift capacity" });
+  await page.getByRole("button", { name: "Choose a small first version" }).click();
+  await page.getByLabel("Feature idea").fill("Connect volunteers to shifts with safe signups");
+  await page.getByRole("button", { name: "Add idea" }).click();
+  await page.getByRole("button", { name: "Write the Builder Brief" }).click();
+  await page.getByLabel("Your Builder instruction").fill("Build a volunteer shift registration app with related events, shifts, volunteers, and signups. Enforce capacity and prevent duplicate registrations.");
+  await page.getByRole("button", { name: "Build Version 1" }).click();
+  await expect(page.getByText("RELATIONAL APP PREVIEW · VERSION 1")).toBeVisible();
+  const preview = page.locator(".v3-app");
+  await expect(preview.getByRole("heading", { name: "Volunteer Shift Planner" })).toBeVisible();
+  await preview.getByRole("button", { name: "Shifts" }).click();
+  await expect(preview.getByText("Morning setup")).toBeVisible();
+  const shift = preview.locator(".v3-table-wrap tbody tr").filter({ hasText: "Morning setup" });
+  await expect(shift.getByRole("cell").nth(4)).toHaveText("1");
+  await preview.getByRole("button", { name: "Register" }).click();
+  await preview.getByLabel("Volunteer", { exact: true }).selectOption("vol_sam");
+  await preview.getByRole("button", { name: "Run register volunteer" }).click();
+  await expect(preview.getByRole("status")).toHaveText("Done.");
+  await preview.getByRole("button", { name: "Registrations" }).click();
+  await expect(preview.getByText("Sam Rivera")).toBeVisible();
+  await expect(preview.getByText("Morning setup")).toHaveCount(2);
+  await page.setViewportSize({ width: 390, height: 844 });
+  const mobileSize = await preview.evaluate((element) => [element.scrollWidth, element.clientWidth]);
+  expect(mobileSize[0], "V3 preview horizontal overflow at 390px").toBeLessThanOrEqual(mobileSize[1]);
+  await page.setViewportSize({ width: 1440, height: 950 });
+});
+
 test("four Studio versions carry real data forward while preserving historical snapshots", async ({ page }) => {
   test.setTimeout(120_000);
   await startProject(page);

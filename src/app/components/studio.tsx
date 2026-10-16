@@ -7,6 +7,9 @@ import { validateArtifact } from "@/lib/builder/contract";
 import { seedRuntimeData, type GeneratedAppV2 } from "@/lib/builder/v2";
 import { applyRuntimeMigration, planRuntimeMigration, validateRuntimeData } from "@/lib/builder/migration";
 import { describeSchemaChanges, diffApplicationSchemas } from "@/lib/builder/schema-diff";
+import { describeV3SchemaChanges, diffV2ToV3, diffV3ApplicationSchemas } from "@/lib/builder/schema-diff-v3";
+import type { GeneratedAppV3 } from "@/lib/builder/v3";
+import { StudioV3Preview } from "@/app/components/studio-v3-preview";
 import type { StudioMigrationProvenance } from "@/lib/studio";
 import { createStudioProject, deleteStudioProject, getServerStudioState, getStudioState, getStudioStorageMessage, openStudioProject, setStudioStage, showStudioHub, subscribeStudio, updateStudioProject } from "@/lib/studio-store";
 
@@ -30,7 +33,13 @@ function ArtifactChanges({ items }: { items: string[] }) {
 
 function SchemaComparison({ before, after }: { before: StudioProject["versions"][number]; after: StudioProject["versions"][number] }) {
   const oldArtifact = before.result.artifact, newArtifact = after.result.artifact;
+  const relationalChanges = oldArtifact?.format === "buildloop-app-v3" && newArtifact?.format === "buildloop-app-v3" ? diffV3ApplicationSchemas(oldArtifact, newArtifact) : oldArtifact?.format === "buildloop-app-v2" && newArtifact?.format === "buildloop-app-v3" ? diffV2ToV3(oldArtifact, newArtifact) : [];
   const changes = oldArtifact?.format === "buildloop-app-v2" && newArtifact?.format === "buildloop-app-v2" ? diffApplicationSchemas(oldArtifact, newArtifact) : [];
+  if (relationalChanges.length || oldArtifact?.format === "buildloop-app-v3" || newArtifact?.format === "buildloop-app-v3") return <details className="studio-version-comparison"><summary>Compare Version {before.number} with Version {after.number}</summary>
+    {[["Data and connections", relationalChanges.filter((change) => change.kind.startsWith("collection-") || change.kind.startsWith("field-") || change.kind.startsWith("relationship-") || change.kind.startsWith("computed-"))], ["App rules", relationalChanges.filter((change) => change.kind.startsWith("constraint-"))], ["Actions", relationalChanges.filter((change) => change.kind.startsWith("workflow-"))], ["Views", relationalChanges.filter((change) => change.kind === "view-changed" || change.kind === "app-changed")]].map(([label, items]) => Array.isArray(items) && items.length > 0 && <section key={String(label)}><strong>{String(label)}</strong><ul>{describeV3SchemaChanges(items as Parameters<typeof describeV3SchemaChanges>[0]).map((item) => <li key={item}>{item}</li>)}</ul></section>)}
+    {!relationalChanges.length && <p>These versions keep the same saved records and connected data model.</p>}
+    {relationalChanges.some((change) => change.risk === "destructive" || change.risk === "incompatible") && <p role="status">Some saved information may need attention before it can move to the newer version.</p>}
+  </details>;
   const groups = [
     ["Data model", changes.filter((change) => change.kind.startsWith("collection-") || change.kind.startsWith("field-") || change.kind === "sample-data-changed")],
     ["App", changes.filter((change) => change.kind === "app-title-changed" || change.kind === "app-summary-changed")],
@@ -191,6 +200,11 @@ export function Studio({ onBack, courseComplete }: { onBack: () => void; courseC
   const heading = (title: string, description: string) => <div className="studio-heading"><span className="eyebrow">{project.name} · {labels[project.stage].toUpperCase()}</span><h1>{title}</h1><p>{description}</p></div>;
   const continueButton = (label: string, onClick: () => void, disabled = false) => <div className="studio-actions"><button className="button button-primary" onClick={onClick} disabled={disabled} type="button">{label} →</button></div>;
   const preview = (artifact: import("@/lib/builder/contract").GeneratedApp, version: number) => {
+    if (artifact.format === "buildloop-app-v3") {
+      const source = project.versions.find((item) => item.number === version - 1)?.result.artifact;
+      const previousArtifact = source?.format === "buildloop-app-v2" || source?.format === "buildloop-app-v3" ? source : undefined;
+      return <StudioV3Preview artifact={artifact as GeneratedAppV3} previousArtifact={previousArtifact} projectId={project.id} version={version} onMigration={(migration) => updateStudioProject(project.id, (current) => ({ ...current, versions: current.versions.map((item) => item.number === version ? { ...item, migration } : item) }))} />;
+    }
     if (artifact.format !== "buildloop-app-v2") return <div className="studio-preview"><div className="studio-preview-head"><span className="eyebrow">INTERACTIVE APP PREVIEW</span><span>Runs in an isolated preview</span></div><iframe title={`${artifact.title} interactive preview`} sandbox="allow-scripts" referrerPolicy="no-referrer" srcDoc={buildPreviewDocument(artifact)} /></div>;
     const source = project.versions.find((item) => item.number === version - 1)?.result.artifact;
     const previousArtifact = source?.format === "buildloop-app-v2" ? source : undefined;

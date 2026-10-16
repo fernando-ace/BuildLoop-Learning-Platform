@@ -12,7 +12,7 @@ export interface StudioMigrationProvenance {
   removedRecords: number;
   defaultedValues: number;
   status: "migrated" | "initialized" | "warning" | "fallback";
-  changes: Array<Pick<import("./builder/schema-diff").SchemaChange, "kind" | "collectionId" | "fieldId" | "itemId" | "destructive">>;
+  changes: Array<{ kind: string; collectionId?: string; fieldId?: string; itemId?: string; destructive?: boolean }>;
   warnings: string[];
 }
 export interface StudioVersion { number: number; instruction: string; builtAt: string; status: "complete"; notes: string; tested: boolean; result: BuilderResult; observations?: string[]; feedback?: string[]; retestedVersion?: number; migration?: StudioMigrationProvenance }

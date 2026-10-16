@@ -4,6 +4,7 @@ import type { GeneratedAppV2 } from "./v2";
 const escapeData = (artifact: unknown) => JSON.stringify(artifact).replace(/</g, "\\u003c").replace(/>/g, "\\u003e").replace(/&/g, "\\u0026");
 
 export function buildPreviewDocument(artifact: GeneratedApp, identity?: { projectId: string; version: number }) {
+  if (artifact.format === "buildloop-app-v3") throw new Error("V3 apps run in the relational Studio preview.");
   return artifact.format === "buildloop-app-v2" ? buildV2PreviewDocument(artifact, identity) : buildV1PreviewDocument(artifact);
 }
 
