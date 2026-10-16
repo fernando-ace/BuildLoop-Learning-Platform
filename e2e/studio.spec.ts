@@ -509,7 +509,8 @@ test("Studio never previews an unsafe generated artifact", async ({ page }) => {
 
 test("V4 shared app uses real signed-in membership, invitation acceptance, and role-checked shared records", async ({ page }) => {
   const origin = "http://127.0.0.1:3107";
-  const created = await page.request.post("/api/apps", { headers: { origin }, data: { name: `Campus Events ${Date.now()}` } });
+  const appName = `Campus Events ${Date.now()}`;
+  const created = await page.request.post("/api/apps", { headers: { origin }, data: { name: appName } });
   const application = (await created.json()).application;
   expect(created.ok()).toBeTruthy();
   const appId = application.id;
@@ -524,6 +525,11 @@ test("V4 shared app uses real signed-in membership, invitation acceptance, and r
 
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
+  await page.goto("/");
+  await page.getByRole("button", { name: "Explore Studio" }).click();
+  await expect(page.getByText(appName, { exact: true })).toBeVisible();
+  await page.locator(".studio-account-apps li").filter({ hasText: appName }).getByRole("link", { name: "Open preview" }).click();
+  await expect(page.getByText("Preview · Version 1")).toBeVisible();
   await page.goto(`/apps/${appId}`);
   await expect(page.getByRole("heading", { name: "Campus Event Operations" })).toBeVisible();
   await expect(page.getByText("Test Owner", { exact: true })).toBeVisible();

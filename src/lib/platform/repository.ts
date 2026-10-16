@@ -55,7 +55,7 @@ async function writeAudit(client: PoolClient, appId: string, actor: string, even
   await client.query("INSERT INTO audit_events(id, app_id, actor_user_id, event_type, resource_id, metadata) VALUES($1,$2,$3,$4,$5,$6::jsonb)", [randomUUID(), appId, actor, eventType, resourceId, JSON.stringify(metadata)]);
 }
 
-export interface ApplicationSummary { id: string; projectId: string; slug: string; name: string; platformRole: PlatformRole; appRole: string | null; productionVersionId: string | null; productionVersionNumber: number | null; }
+export interface ApplicationSummary { id: string; projectId: string; slug: string; name: string; platformRole: PlatformRole; appRole: string | null; productionVersionId: string | null; productionVersionNumber: number | null; previewVersionId: string | null; previewVersionNumber: number | null; }
 
 function emptyRuntime(artifact: GeneratedAppV4): RuntimeData { return Object.fromEntries(artifact.collections.map((collection) => [collection.id, []])); }
 function countRuntime(data: RuntimeData) { return Object.values(data).reduce((sum, rows) => sum + rows.length, 0); }
@@ -256,7 +256,7 @@ export class PlatformRepository {
 
   async listApplications(userId: string): Promise<ApplicationSummary[]> {
     const result = await getPlatformPool().query<ApplicationSummary>(
-      `SELECT a.id, a.project_id AS "projectId", a.slug, a.name, m.platform_role AS "platformRole", m.app_role AS "appRole", e.published_version_id AS "productionVersionId", v.version_number AS "productionVersionNumber" FROM applications a JOIN application_memberships m ON m.app_id = a.id AND m.user_id = $1 LEFT JOIN app_environments e ON e.app_id = a.id AND e.environment = 'production' LEFT JOIN application_versions v ON v.app_id = e.app_id AND v.version_id = e.published_version_id ORDER BY a.created_at DESC`, [userId]);
+      `SELECT a.id, a.project_id AS "projectId", a.slug, a.name, m.platform_role AS "platformRole", m.app_role AS "appRole", e.published_version_id AS "productionVersionId", v.version_number AS "productionVersionNumber", p.published_version_id AS "previewVersionId", pv.version_number AS "previewVersionNumber" FROM applications a JOIN application_memberships m ON m.app_id = a.id AND m.user_id = $1 LEFT JOIN app_environments e ON e.app_id = a.id AND e.environment = 'production' LEFT JOIN application_versions v ON v.app_id = e.app_id AND v.version_id = e.published_version_id LEFT JOIN app_environments p ON p.app_id = a.id AND p.environment = 'preview' LEFT JOIN application_versions pv ON pv.app_id = p.app_id AND pv.version_id = p.published_version_id ORDER BY a.created_at DESC`, [userId]);
     return result.rows;
   }
 

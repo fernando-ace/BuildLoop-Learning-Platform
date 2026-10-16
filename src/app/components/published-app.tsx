@@ -5,7 +5,7 @@ import type { RuntimeData } from "@/lib/builder/v2";
 import { evaluateV3Expression, getComputedValues, unmetWorkflowRule } from "@/lib/builder/v3";
 import { canUsePermission, filterVisibleRows, toV3Artifact, type GeneratedAppV4, type V4AppUser } from "@/lib/builder/v4";
 
-type AppView = { published: true; versionId: string; versionNumber: number; artifact: GeneratedAppV4; user: V4AppUser; data: RuntimeData; activity: Array<{ id: number; actorName: string; createdAt: string; operation: string; collection: string; recordIds: string[] }> };
+type AppView = { published: true; versionId: string; versionNumber: number; environment: "preview" | "production"; artifact: GeneratedAppV4; user: V4AppUser; data: RuntimeData; activity: Array<{ id: number; actorName: string; createdAt: string; operation: string; collection: string; recordIds: string[] }> };
 type Collection = GeneratedAppV4["collections"][number];
 
 function RecordEditor({ collection, artifact, data, row, onSave, onCancel }: { collection: Collection; artifact: GeneratedAppV4; data: RuntimeData; row?: Record<string, unknown>; onSave: (values: Record<string, unknown>) => void; onCancel: () => void }) {
@@ -37,7 +37,7 @@ function RecordEditor({ collection, artifact, data, row, onSave, onCancel }: { c
   </form>;
 }
 
-export function PublishedApp({ appId }: { appId: string }) {
+export function PublishedApp({ appId, environment = "production" }: { appId: string; environment?: "preview" | "production" }) {
   const [view, setView] = useState<AppView | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -46,14 +46,14 @@ export function PublishedApp({ appId }: { appId: string }) {
 
   const load = useCallback(async () => {
     try {
-      const response = await fetch(`/api/apps/${encodeURIComponent(appId)}`, { cache: "no-store" });
+      const response = await fetch(`/api/apps/${encodeURIComponent(appId)}${environment === "preview" ? "?environment=preview" : ""}`, { cache: "no-store" });
       const result = await response.json();
       if (!response.ok) { setMessage(result.error || "This app could not be opened."); setView(null); return; }
       setView(result as AppView);
       setMessage("");
     } catch { setMessage("Could not reach this shared app. Check your connection and refresh."); }
     finally { setLoading(false); }
-  }, [appId]);
+  }, [appId, environment]);
 
   useEffect(() => { void Promise.resolve().then(() => load()); }, [load]);
 
@@ -61,7 +61,7 @@ export function PublishedApp({ appId }: { appId: string }) {
     if (!view) return;
     setBusy(true); setMessage("");
     try {
-      const response = await fetch(`/api/apps/${encodeURIComponent(appId)}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ versionId: view.versionId, operation }), cache: "no-store" });
+      const response = await fetch(`/api/apps/${encodeURIComponent(appId)}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ versionId: view.versionId, environment, operation }), cache: "no-store" });
       const result = await response.json();
       if (!response.ok) { setMessage(result.error || "That change was not saved."); await load(); return; }
       setEditor(null);
@@ -78,7 +78,7 @@ export function PublishedApp({ appId }: { appId: string }) {
 
   const user = view.user;
   return <main className="published-app">
-    <header className="published-header"><div><span>Shared app · Version {view.versionNumber}</span><h1>{view.artifact.title}</h1><p>{view.artifact.summary}</p></div><p className="published-user-switch">Signed in as <strong>{user.displayName}</strong><br />{user.roles.map((role) => view.artifact.roles.find((item) => item.id === role)?.label ?? role).join(", ")}</p></header>
+    <header className="published-header"><div><span>{environment === "preview" ? "Preview" : "Shared app"} · Version {view.versionNumber}</span><h1>{view.artifact.title}</h1><p>{view.artifact.summary}</p></div><p className="published-user-switch">Signed in as <strong>{user.displayName}</strong><br />{user.roles.map((role) => view.artifact.roles.find((item) => item.id === role)?.label ?? role).join(", ")}</p></header>
     <p className="published-education">Each change is checked by the app server. Shared records appear here after refresh.</p>
     {message && <p className="published-feedback" role="status">{message}</p>}
     {view.artifact.collections.map((collection) => {

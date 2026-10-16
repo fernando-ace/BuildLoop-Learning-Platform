@@ -1033,6 +1033,13 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, summary:focus
 .studio-project-row { padding: 19px 2px; border-bottom: 1px solid var(--line); }
 .studio-project-row h3 { margin: 4px 0; font: 700 18px 'Manrope', sans-serif; }
 .studio-project-row p { max-width: 640px; margin: 0; color: var(--muted); font-size: 13px; }
+.studio-account-apps { margin: 24px 0; padding: 18px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper); }
+.studio-account-apps > .eyebrow { display: block; margin-bottom: 12px; }
+.studio-account-apps ul { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.studio-account-apps li { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-top: 10px; border-top: 1px solid var(--line); }
+.studio-account-apps li > div:first-child { display: grid; gap: 2px; }
+.studio-account-apps li span { color: var(--muted); font-size: 12px; text-transform: capitalize; }
+.studio-account-apps li > div:last-child { display: flex; flex-wrap: wrap; gap: 8px; }
 .studio-empty { color: var(--soft-muted); font-size: 13px; }
 .studio-workspace { width: min(100% - 48px, 820px); padding-top: 28px; }
 .studio-workspace-nav { margin-bottom: 24px; }
@@ -1170,6 +1177,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, summary:focus
   .studio-hub-card .button { width: 100%; }
   .studio-section-title, .studio-project-row { align-items: flex-start; flex-direction: column; gap: 12px; }
   .studio-project-row .button, .studio-section-title > .button { width: 100%; }
+  .studio-account-apps li { align-items: stretch; flex-direction: column; }
+  .studio-account-apps li > div:last-child { display: grid; }
   .studio-progress { grid-template-columns: repeat(4, 1fr); gap: 10px 4px; margin: 19px 0 26px; }
   .studio-progress > span { gap: 4px; font-size: 9px; }
   .studio-progress small { font-size: 9px; }
