@@ -61,9 +61,21 @@ function deterministicV4Artifact(request: BuilderRequest): GeneratedAppV4 {
     if (/cancel|remove|delete/.test(instruction) && /own|another|someone else|other volunteer/.test(instruction)) {
       const volunteer = previous.roles.find((role) => /volunteer|member|borrower/i.test(role.label));
       const signup = previous.collections.find((collection) => /signup|registration|attendance|checkout/i.test(collection.id));
-      if (volunteer && signup && !previous.permissions.some((permission) => permission.id === "member_create_own")) {
-        const field = signup.fields.find((candidate) => /user|member|borrower|volunteer/i.test(candidate.id));
-        if (field) previous.permissions.push({ id: "member_create_own", role: volunteer.id, collection: signup.id, operations: ["create"], visibility: "owned", ownership: { op: "equals", left: { op: "recordField", field: field.id }, right: { op: "userField", field: "id" } } });
+      if (volunteer && signup) {
+        const ownerField = [...signup.fields.map((field) => field.id), ...signup.relationships.map((relationship) => relationship.field)].find((field) => /user|member|borrower|volunteer/i.test(field));
+        if (ownerField) {
+          const ownership = { op: "equals" as const, left: { op: "recordField" as const, field: ownerField }, right: { op: "userField" as const, field: "id" as const } };
+          const deletePermission = previous.permissions.find((permission) => permission.role === volunteer.id && permission.collection === signup.id && permission.visibility === "owned" && permission.ownership && permission.operations.includes("delete"));
+          if (!deletePermission) previous.permissions.push({ id: "member_delete_own", role: volunteer.id, collection: signup.id, operations: ["delete"], visibility: "owned", ownership });
+          let cancellation = previous.workflows.find((workflow) => /cancel|remove/i.test(workflow.id) && workflow.collection === signup.id);
+          if (!cancellation) {
+            cancellation = { id: "cancel_own_signup", label: "Cancel own signup", collection: signup.id, steps: [{ id: "remove_own_signup", type: "delete", collection: signup.id, target: "current" }] };
+            previous.workflows.push(cancellation);
+          }
+          const workflowPermission = previous.workflowPermissions.find((permission) => permission.workflow === cancellation!.id);
+          if (!workflowPermission) previous.workflowPermissions.push({ workflow: cancellation.id, roles: [volunteer.id] });
+          else if (!workflowPermission.roles.includes(volunteer.id)) workflowPermission.roles.push(volunteer.id);
+        }
       }
     }
     previous.summary = `Updated to focus on: ${request.instruction.slice(0, 120)}`;

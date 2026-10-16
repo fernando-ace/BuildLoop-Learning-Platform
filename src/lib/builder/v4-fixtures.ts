@@ -57,6 +57,7 @@ export const permissionBoundaryLabV4: GeneratedAppV4 = {
   users: [{ id: "vol_ada", displayName: "Jordan Lee", roles: ["member"] }, { id: "vol_sam", displayName: "Riley Chen", roles: ["member"] }, { id: "lab_admin", displayName: "Casey Morgan", roles: ["admin"] }],
   permissions: [
     { id: "public_events", role: "member", collection: "events", operations: ["read"], visibility: "public", fields: ["name", "date", "location"] },
+    { id: "member_shifts", role: "member", collection: "shifts", operations: ["read"], visibility: "public", fields: ["name", "starts_at", "capacity", "signup_count", "remaining", "is_full"] },
     { id: "private_signups", role: "member", collection: "registrations", operations: ["read"], visibility: "owned", ownership: { op: "equals", left: { op: "recordField", field: "volunteer_id" }, right: { op: "userField", field: "id" } } },
     { id: "own_signup_create", role: "member", collection: "registrations", operations: ["create"], visibility: "owned", ownership: { op: "equals", left: { op: "recordField", field: "volunteer_id" }, right: { op: "userField", field: "id" } } },
     { id: "admin_events", role: "admin", collection: "events", operations: ["read", "create", "update", "delete"], visibility: "all" },
@@ -67,4 +68,4 @@ export const permissionBoundaryLabV4: GeneratedAppV4 = {
   workflowPermissions: [{ workflow: "register_volunteer", roles: ["member", "admin"] }],
 };
 
-export const v4Fixtures = [volunteerCoordinationV4, equipmentCheckoutAppV4, clubAttendanceAppV4] as const;
+export const v4Fixtures = [volunteerCoordinationV4, equipmentCheckoutAppV4, clubAttendanceAppV4, permissionBoundaryLabV4] as const;

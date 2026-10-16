@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import type { RuntimeData } from "@/lib/builder/v2";
 import { applyWorkflow, getComputedValues, seedRuntimeDataV3, validateRuntimeDataV3 } from "@/lib/builder/v3";
-import { describeV4Permissions, filterVisibleRows, getV4User, stampOwnedFields, toV3Artifact, type GeneratedAppV4 } from "@/lib/builder/v4";
+import { canUsePermission, describeV4Permissions, filterVisibleRows, getV4User, stampOwnedFields, toV3Artifact, type GeneratedAppV4 } from "@/lib/builder/v4";
 
 export function StudioV4Preview({ artifact, version }: { artifact: GeneratedAppV4; version: number }) {
   const initialData = useMemo(() => seedRuntimeDataV3(toV3Artifact(artifact)), [artifact]);
@@ -51,7 +51,7 @@ export function StudioV4Preview({ artifact, version }: { artifact: GeneratedAppV
       return rows.length || artifact.permissions.some((permission) => permission.collection === collection.id && permission.operations.includes("read") && user?.roles.includes(permission.role)) ? <section className="studio-v4-list" key={collection.id}>
         <h3>{collection.label}</h3>
         {rows.length ? <ul>{rows.map((row) => <li key={String(row.id)}><div><strong>{String(row[collection.fields[0]?.id] ?? row.id)}</strong>{fields.filter((field) => field.id !== collection.fields[0]?.id).map((field) => <span key={field.id}>{field.label}: {String(row[field.id] ?? "—")}</span>)}{collection.computed?.map((field) => <span key={field.id}>{field.label}: {String(getComputedValues(toV3Artifact(artifact), data, collection.id, row)[field.id] ?? "—")}</span>)}</div>
-          <div className="studio-v4-row-actions">{workflows.map((workflow) => <button className="button button-quiet" type="button" key={workflow.id} onClick={() => runWorkflow(workflow.id, String(row.id))}>{workflow.label}</button>)}{user && !artifact.permissions.some((permission) => permission.collection === collection.id && permission.operations.includes("update") && user.roles.includes(permission.role)) && <button className="text-button" type="button" onClick={() => testDeniedEdit(collection.id, row)}>Test blocked edit</button>}</div>
+          <div className="studio-v4-row-actions">{workflows.map((workflow) => <button className="button button-quiet" type="button" key={workflow.id} onClick={() => runWorkflow(workflow.id, String(row.id))}>{workflow.label}</button>)}{user && !canUsePermission(artifact, user, collection.id, "update", row) && <button className="text-button" type="button" onClick={() => testDeniedEdit(collection.id, row)}>Test blocked edit</button>}</div>
         </li>)}</ul> : <p>No records are visible to this user.</p>}
       </section> : null;
     })}</div>
