@@ -1,5 +1,7 @@
 import { BuilderError, MAX_BUILDER_INPUT_CHARS, validateArtifact, type BuilderRequest } from "@/lib/builder/contract";
 import { getBuilder } from "@/lib/builder/provider";
+import { getPlatformIdentity } from "@/lib/platform/session";
+import { getPlatformRepository, PlatformError } from "@/lib/platform/repository";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -17,6 +19,8 @@ function allowedOrigin(request: Request) {
 
 export async function POST(request: Request) {
   if (!allowedOrigin(request)) return Response.json({ error: "The request could not be accepted." }, { status: 403 });
+  const identity = await getPlatformIdentity(request);
+  if (!identity) return Response.json({ error: "Sign in to build in Studio." }, { status: 401, headers: { "Cache-Control": "no-store" } });
   if (process.env.BUILDLOOP_BUILDER_MODE !== "deterministic") {
     const forwarded = request.headers.get("x-forwarded-for")?.split(",");
     const ip = forwarded?.at(-1)?.trim() || "local";
@@ -28,6 +32,7 @@ export async function POST(request: Request) {
   try { const raw = await request.text(); if (raw.length > MAX_BUILDER_INPUT_CHARS * 2) return Response.json({ error: "This project brief is too long to build." }, { status: 413 }); body = JSON.parse(raw); } catch { return Response.json({ error: "The Builder request was incomplete." }, { status: 400 }); }
   if (!body || typeof body !== "object") return Response.json({ error: "The Builder request was incomplete." }, { status: 400 });
   const value = body as Record<string, unknown>;
+  if (typeof value.appId !== "string" || !/^app_[0-9a-f-]{36}$/.test(value.appId)) return Response.json({ error: "Open a saved Studio project before building." }, { status: 400 });
   const project = value.project as Record<string, unknown> | null;
   if (!project || !Object.entries(limits).every(([key, max]) => isBoundedText(project[key], max)) || !Array.isArray(project.inScope) || project.inScope.length > 12 || !project.inScope.every((x) => isBoundedText(x, 180)) || !Array.isArray(project.laterIdeas) || project.laterIdeas.length > 12 || !project.laterIdeas.every((x) => isBoundedText(x, 180))) return Response.json({ error: "The Builder request was incomplete." }, { status: 400 });
   if (!isBoundedText(value.instruction, 1200) || value.instruction.length > MAX_BUILDER_INPUT_CHARS || !["initial", "iteration"].includes(String(value.mode)) || !Number.isInteger(value.version) || Number(value.version) < 1 || Number(value.version) > 20) return Response.json({ error: "The Builder request was incomplete." }, { status: 400 });
@@ -48,8 +53,15 @@ export async function POST(request: Request) {
     observations: observationRows as BuilderRequest["observations"],
     feedback: feedbackRows as BuilderRequest["feedback"],
   };
-  try { return Response.json(await getBuilder().generate(safe), { headers: { "Cache-Control": "no-store" } }); }
+  try {
+    const result = await getBuilder().generate(safe);
+    if (!(process.env.NODE_ENV === "test" && process.env.BUILDLOOP_TEST_DB_PERSISTENCE !== "1")) {
+      await getPlatformRepository().saveVersion(identity, value.appId, safe.version, result.artifact, { provider: result.provider, attempts: result.attempts, projectName: project.name });
+    }
+    return Response.json(result, { headers: { "Cache-Control": "no-store" } });
+  }
   catch (error) {
+    if (error instanceof PlatformError) return Response.json({ error: error.message, code: error.code }, { status: error.code === "forbidden" ? 403 : error.code === "conflict" ? 409 : 400, headers: { "Cache-Control": "no-store" } });
     if (error instanceof BuilderError) {
       const status = error.code === "configuration" ? 503 : error.code === "invalid_output" ? 422 : error.code === "timeout" ? 504 : 502;
       const message = error.code === "configuration" ? "The Builder is not configured yet. Ask your project guide to set it up." : error.code === "invalid_output" ? "The Builder returned a version BuildLoop could not safely run. Your project is safe; try again." : "The Builder couldn't connect right now. Your project is safe. Try the build again.";

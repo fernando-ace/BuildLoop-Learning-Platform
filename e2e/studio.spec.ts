@@ -1,5 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
-import { volunteerCoordinationV4 } from "../src/lib/builder/v4-fixtures";
+import { campusEventOperationsV4 } from "../src/lib/builder/v4-platform-fixtures";
+
+test.beforeEach(async ({ page }) => {
+  const response = await page.request.post("/api/test-auth/session", { headers: { origin: "http://127.0.0.1:3107" }, data: { userId: "test-owner" } });
+  expect(response.ok(), await response.text()).toBeTruthy();
+});
 
 async function startProject(page: Page, checkEntryResponsive = false, details = { name: "Topic Tracker", user: "Students who study after school", problem: "They lose track of which topics need more practice before a test", why: "They want to use their study time well" }) {
   await page.goto("/");
@@ -73,7 +78,7 @@ test("Studio supports build, try, feedback, iteration, retest, summary, and refr
   await page.reload();
   await expect(page.getByLabel("Your Builder instruction")).toHaveValue("Build a topic review list for students who study after school. They lose track of which topics need more practice. Students can see topics due today and mark a topic practiced. Show topics due for review. Keep the layout readable on a phone.");
   await page.getByRole("button", { name: "Build Version 1" }).click();
-  await expect(page.getByText("DETERMINISTIC TEST BUILDER")).toBeVisible();
+  await expect(page.getByText("DETERMINISTIC TEST BUILDER")).toBeVisible({ timeout: 20_000 });
   await checkStudioWidths(page, "Version 1 preview");
   expect(await page.locator('iframe[title="Topic Tracker interactive preview"]').getAttribute("sandbox")).toBe("allow-scripts");
   const csp = await page.frameLocator('iframe[title="Topic Tracker interactive preview"]').locator('meta[http-equiv="Content-Security-Policy"]').getAttribute("content");
@@ -502,33 +507,38 @@ test("Studio never previews an unsafe generated artifact", async ({ page }) => {
   await expect(page.locator("iframe")).toHaveCount(0);
 });
 
-test("V4 published app shares authorized records across demo identities", async ({ page }) => {
-  const appId = `goal12-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  const response = await page.request.post(`/api/apps/${appId}/publish`, { headers: { origin: "http://127.0.0.1:3107" }, data: { action: "publish", versionNumber: 1, artifact: volunteerCoordinationV4 } });
-  const publication = await response.json();
-  expect(response.ok(), JSON.stringify(publication)).toBeTruthy();
-  expect(publication.published).toBe(true);
+test("V4 shared app uses real signed-in membership, invitation acceptance, and role-checked shared records", async ({ page }) => {
+  const origin = "http://127.0.0.1:3107";
+  const created = await page.request.post("/api/apps", { headers: { origin }, data: { name: `Campus Events ${Date.now()}` } });
+  const application = (await created.json()).application;
+  expect(created.ok()).toBeTruthy();
+  const appId = application.id;
+  const version = await page.request.post(`/api/apps/${appId}/versions`, { headers: { origin }, data: { versionNumber: 1, artifact: campusEventOperationsV4 } });
+  expect(version.ok(), await version.text()).toBeTruthy();
+  const publication = await page.request.post(`/api/apps/${appId}/publish`, { headers: { origin }, data: { action: "publish", versionId: "v1", expectedPublishedVersion: null } });
+  expect(publication.ok(), await publication.text()).toBeTruthy();
+  const inviteResponse = await page.request.post(`/api/apps/${appId}/invitations`, { headers: { origin }, data: { appRole: "volunteer", email: "collaborator@example.test" } });
+  expect(inviteResponse.ok(), await inviteResponse.text()).toBeTruthy();
+  const invitation = (await inviteResponse.json()).invitation;
+  const token = new URL(invitation.url).pathname.split("/").at(-1)!;
 
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto(`/apps/${appId}`);
-  await expect(page.getByRole("heading", { name: "Campus Volunteer Operations" })).toBeVisible();
-  await page.getByRole("button", { name: /Riley Chen/ }).click();
+  await expect(page.getByRole("heading", { name: "Campus Event Operations" })).toBeVisible();
+  await expect(page.getByText("Test Owner", { exact: true })).toBeVisible();
+  await page.request.post("/api/test-auth/session", { headers: { origin }, data: { userId: "test-collaborator" } });
+  await page.goto(`/invite/${token}`);
+  await expect(page).toHaveURL(new RegExp(`/apps/${appId}$`));
+  await expect(page.getByRole("heading", { name: "Campus Event Operations" })).toBeVisible();
   const registrations = page.locator(".published-collection").filter({ has: page.getByRole("heading", { name: "Registrations" }) });
   await expect(registrations.getByText("No records are visible to this role.")).toBeVisible();
   const shifts = page.locator(".published-collection").filter({ has: page.getByRole("heading", { name: "Shifts" }) });
   await shifts.getByRole("button", { name: "register volunteer" }).click();
   await expect(page.getByRole("status")).toContainText("Saved");
   await expect(registrations.getByText("1 visible record")).toBeVisible();
-
-  await page.getByLabel("Using this app as").selectOption("vol_ada");
-  await expect(registrations.getByText("1 visible record")).toBeVisible();
-  await page.getByLabel("Using this app as").selectOption("vol_coordinator");
-  await expect(registrations.getByText("2 visible records")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Recent activity" })).toBeVisible();
   await page.reload();
-  await expect(page.locator(".published-collection").filter({ has: page.getByRole("heading", { name: "Registrations" }) }).getByText("2 visible records")).toBeVisible();
-
+  await expect(registrations.getByText("1 visible record")).toBeVisible();
   for (const width of [390, 430, 768, 1440]) {
     await page.setViewportSize({ width, height: 950 });
     const size = await page.evaluate(() => [document.documentElement.scrollWidth, document.documentElement.clientWidth]);

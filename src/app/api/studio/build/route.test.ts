@@ -1,8 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { POST } from "./route";
+import { issueTestSession, testCookieName } from "@/lib/platform/session";
 
-const payload = { project: { name: "Study tracker", user: "Students", problem: "They lose track of practice", why: "Study time matters", behavior: "Add a topic", constraints: "Phone friendly", inScope: ["Track a topic"], laterIdeas: ["Share with friends"] }, mode: "initial", version: 1, instruction: "Build a simple topic tracker", observations: [], feedback: [] };
-function request(body: unknown, headers: Record<string, string> = {}) { return new Request("http://localhost/api/studio/build", { method: "POST", headers: { host: "localhost", origin: "http://localhost", "content-type": "application/json", ...headers }, body: JSON.stringify(body) }); }
+const payload = { appId: "app_12345678-1234-1234-1234-123456789abc", project: { name: "Study tracker", user: "Students", problem: "They lose track of practice", why: "Study time matters", behavior: "Add a topic", constraints: "Phone friendly", inScope: ["Track a topic"], laterIdeas: ["Share with friends"] }, mode: "initial", version: 1, instruction: "Build a simple topic tracker", observations: [], feedback: [] };
+function request(body: unknown, headers: Record<string, string> = {}) {
+  vi.stubEnv("BUILDLOOP_AUTH_MODE", "test"); vi.stubEnv("BUILDLOOP_TEST_AUTH_SECRET", "unit-test-secret-with-at-least-32-characters");
+  const cookie = `${testCookieName()}=${issueTestSession("test-owner")}`;
+  return new Request("http://localhost/api/studio/build", { method: "POST", headers: { host: "localhost", origin: "http://localhost", "content-type": "application/json", cookie, ...headers }, body: JSON.stringify(body) });
+}
 
 afterEach(() => vi.unstubAllEnvs());
 
@@ -20,6 +25,11 @@ describe("Studio Builder route", () => {
     expect((await POST(request(payload, { origin: "https://attacker.example" }))).status).toBe(403);
     expect((await POST(request({ ...payload, project: { ...payload.project, name: "x".repeat(81) } }))).status).toBe(400);
     expect((await POST(request({ ...payload, instruction: "x".repeat(1300) }))).status).toBe(400);
+  });
+
+  it("requires a trusted platform session before building", async () => {
+    const unauthorized = new Request("http://localhost/api/studio/build", { method: "POST", headers: { host: "localhost", origin: "http://localhost", "content-type": "application/json" }, body: JSON.stringify(payload) });
+    expect((await POST(unauthorized)).status).toBe(401);
   });
 
   it("bounds serialized request size", async () => {

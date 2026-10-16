@@ -7,16 +7,10 @@ import { applyRuntimeMigrationV3, planRuntimeMigrationV3, type MigrationSourceAr
 import { diffV4ApplicationSchemas } from "../builder/schema-diff-v4";
 import { applyWorkflow, getComputedValues, seedRuntimeDataV3, validateRuntimeDataV3 } from "../builder/v3";
 import { canUsePermission, evaluateOwnership, filterVisibleRows, getV4User, stampOwnedFields, toV3Artifact, validateArtifactV4, type GeneratedAppV4, type V4AppUser, type V4Operation } from "../builder/v4";
-
-export type SharedErrorCode = "validation" | "authorization" | "not_found" | "conflict" | "constraint" | "stale_version" | "migration" | "workflow" | "persistence";
-export class SharedRuntimeError extends Error {
-  constructor(public readonly code: SharedErrorCode, message: string, public readonly details?: unknown) { super(message); }
-}
-export type SharedOperation =
-  | { type: "create"; collection: string; values: Record<string, unknown> }
-  | { type: "update"; collection: string; recordId: string; values: Record<string, unknown> }
-  | { type: "delete"; collection: string; recordId: string }
-  | { type: "workflow"; workflow: string; recordId: string; inputs?: Record<string, string | number | boolean | null | string[]> };
+import { SharedRuntimeError } from "./runtime-errors";
+import type { SharedOperation } from "./runtime-errors";
+export { SharedRuntimeError } from "./runtime-errors";
+export type { SharedOperation } from "./runtime-errors";
 export interface PublishedRuntimeView { appId: string; versionId: string; versionNumber: number; artifact: GeneratedAppV4; user: V4AppUser; data: RuntimeData; activity: AuditEntry[] }
 export interface AuditEntry { id: number; actorId: string; actorName: string; createdAt: string; operation: string; collection: string; recordIds: string[]; result: "success" }
 export interface PublicationAnalysis { ok: boolean; appId: string; targetVersionId: string; previousVersionId: string | null; changes: ReturnType<typeof diffV4ApplicationSchemas>; warnings: string[]; requiresConfirmation: boolean; blockedReason?: string }

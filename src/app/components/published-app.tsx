@@ -3,11 +3,9 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import type { RuntimeData } from "@/lib/builder/v2";
 import { evaluateV3Expression, getComputedValues, unmetWorkflowRule } from "@/lib/builder/v3";
-import { canUsePermission, filterVisibleRows, getV4User, toV3Artifact, type GeneratedAppV4 } from "@/lib/builder/v4";
+import { canUsePermission, filterVisibleRows, toV3Artifact, type GeneratedAppV4, type V4AppUser } from "@/lib/builder/v4";
 
-type AppView = { published: true; versionId: string; versionNumber: number; artifact: GeneratedAppV4; user: { id: string; displayName: string; roles: string[] }; data: RuntimeData; activity: Array<{ id: number; actorName: string; createdAt: string; operation: string; collection: string; recordIds: string[] }> };
-type AppChoice = { id: string; displayName: string; roles: string[] };
-type AppBootstrap = { published: true; versionId: string; versionNumber: number; artifact: GeneratedAppV4; users: AppChoice[] };
+type AppView = { published: true; versionId: string; versionNumber: number; artifact: GeneratedAppV4; user: V4AppUser; data: RuntimeData; activity: Array<{ id: number; actorName: string; createdAt: string; operation: string; collection: string; recordIds: string[] }> };
 type Collection = GeneratedAppV4["collections"][number];
 
 function RecordEditor({ collection, artifact, data, row, onSave, onCancel }: { collection: Collection; artifact: GeneratedAppV4; data: RuntimeData; row?: Record<string, unknown>; onSave: (values: Record<string, unknown>) => void; onCancel: () => void }) {
@@ -40,7 +38,6 @@ function RecordEditor({ collection, artifact, data, row, onSave, onCancel }: { c
 }
 
 export function PublishedApp({ appId }: { appId: string }) {
-  const [bootstrap, setBootstrap] = useState<AppBootstrap | null>(null);
   const [view, setView] = useState<AppView | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -51,9 +48,8 @@ export function PublishedApp({ appId }: { appId: string }) {
     try {
       const response = await fetch(`/api/apps/${encodeURIComponent(appId)}`, { cache: "no-store" });
       const result = await response.json();
-      if (!response.ok) { setMessage(result.error || "This app could not be opened."); setBootstrap(null); setView(null); return; }
-      if (result.user) { setView(result as AppView); setBootstrap(null); }
-      else { setView(null); setBootstrap(result as AppBootstrap); }
+      if (!response.ok) { setMessage(result.error || "This app could not be opened."); setView(null); return; }
+      setView(result as AppView);
       setMessage("");
     } catch { setMessage("Could not reach this shared app. Check your connection and refresh."); }
     finally { setLoading(false); }
@@ -61,22 +57,11 @@ export function PublishedApp({ appId }: { appId: string }) {
 
   useEffect(() => { void Promise.resolve().then(() => load()); }, [load]);
 
-  async function chooseIdentity(userId: string) {
-    setBusy(true); setMessage("");
-    try {
-      const response = await fetch(`/api/apps/${encodeURIComponent(appId)}/identity`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ userId }), cache: "no-store" });
-      const result = await response.json();
-      if (!response.ok) { setMessage(result.error || "That test user could not be selected."); return; }
-      await load();
-    } catch { setMessage("Could not choose that test user. Try again."); }
-    finally { setBusy(false); }
-  }
-
   async function send(operation: unknown) {
     if (!view) return;
     setBusy(true); setMessage("");
     try {
-      const response = await fetch(`/api/apps/${encodeURIComponent(appId)}/mutations`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ versionId: view.versionId, operation }), cache: "no-store" });
+      const response = await fetch(`/api/apps/${encodeURIComponent(appId)}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ versionId: view.versionId, operation }), cache: "no-store" });
       const result = await response.json();
       if (!response.ok) { setMessage(result.error || "That change was not saved."); await load(); return; }
       setEditor(null);
@@ -88,14 +73,12 @@ export function PublishedApp({ appId }: { appId: string }) {
 
   const baseArtifact = view ? toV3Artifact(view.artifact) : null;
   if (loading) return <main className="published-app"><p role="status">Opening the shared app…</p></main>;
-  if (!bootstrap && !view) return <main className="published-app"><h1>Shared app</h1><p role="alert">{message || "This app is not available."}</p><a href="/">Return to BuildLoop</a></main>;
-  if (bootstrap && !view) return <main className="published-app"><header className="published-header"><span>Shared app · Version {bootstrap.versionNumber}</span><h1>{bootstrap.artifact.title}</h1><p>{bootstrap.artifact.summary}</p></header><section className="published-identity"><h2>Who is using this app?</h2><p>Choose a demo identity to preview this app’s roles. Demo identities are for testing, not real sign-in.</p><div>{bootstrap.users.map((user) => <button className="button button-primary" key={user.id} type="button" disabled={busy} onClick={() => void chooseIdentity(user.id)}>{user.displayName}<small>{user.roles.map((role) => bootstrap.artifact.roles.find((item) => item.id === role)?.label ?? role).join(", ")}</small></button>)}</div>{message && <p role="alert">{message}</p>}</section></main>;
+  if (!view) return <main className="published-app"><h1>Shared app</h1><p role="alert">{message || "This app is not available."}</p>{message.includes("Sign in") ? <a className="button button-primary" href={`/sign-in?returnTo=${encodeURIComponent(`/apps/${appId}`)}`}>Sign in</a> : <a href="/">Return to BuildLoop</a>}</main>;
   if (!view || !baseArtifact) return null;
 
-  const user = getV4User(view.artifact, view.user.id);
-  if (!user) return <main className="published-app"><p role="alert">This test identity is no longer part of the published version. Choose another one.</p><button className="button button-primary" onClick={() => void load()}>Choose a test identity</button></main>;
+  const user = view.user;
   return <main className="published-app">
-    <header className="published-header"><div><span>Shared app · Version {view.versionNumber}</span><h1>{view.artifact.title}</h1><p>{view.artifact.summary}</p></div><label className="published-user-switch" htmlFor="published-user">Using this app as<select id="published-user" value={user.id} disabled={busy} onChange={(event) => void chooseIdentity(event.target.value)}>{view.artifact.users.map((choice) => <option value={choice.id} key={choice.id}>{choice.displayName} · {choice.roles.map((role) => view.artifact.roles.find((item) => item.id === role)?.label ?? role).join(", ")}</option>)}</select></label></header>
+    <header className="published-header"><div><span>Shared app · Version {view.versionNumber}</span><h1>{view.artifact.title}</h1><p>{view.artifact.summary}</p></div><p className="published-user-switch">Signed in as <strong>{user.displayName}</strong><br />{user.roles.map((role) => view.artifact.roles.find((item) => item.id === role)?.label ?? role).join(", ")}</p></header>
     <p className="published-education">Each change is checked by the app server. Shared records appear here after refresh.</p>
     {message && <p className="published-feedback" role="status">{message}</p>}
     {view.artifact.collections.map((collection) => {

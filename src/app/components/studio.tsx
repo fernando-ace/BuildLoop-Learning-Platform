@@ -159,8 +159,20 @@ function NewProjectForm() {
   const [user, setUser] = useState("");
   const [problem, setProblem] = useState("");
   const [why, setWhy] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
   const coaching = problemCoaching(problem, user);
-  return <><div className="studio-form">{field("new-name", "Project name", name, setName, "e.g. Practice planner")}{field("new-user", "Who is this for?", user, setUser, "One kind of person")}{field("new-problem", "What are they trying to do, and what gets in the way?", problem, setProblem, "Describe the hard part.", true)}{field("new-why", "Why does solving this matter?", why, setWhy, "What could get easier?")}</div>{coaching && <p className="studio-coach" role="status">A thought to help you shape it: {coaching}</p>}<div className="studio-actions"><button className="button button-primary" disabled={!name.trim()} onClick={() => createStudioProject(createProject({ name: name.trim(), user: user.trim(), problem: problem.trim(), why: why.trim() }))} type="button">Create project →</button></div></>;
+  async function create() {
+    setBusy(true); setMessage("");
+    try {
+      const response = await fetch("/api/apps", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: name.trim(), brief: { user: user.trim(), problem: problem.trim(), why: why.trim() } }) });
+      const result = await response.json();
+      if (!response.ok) { setMessage(result.error || "Sign in to create a project."); return; }
+      createStudioProject(createProject({ name: name.trim(), user: user.trim(), problem: problem.trim(), why: why.trim() }, result.application.id));
+    } catch { setMessage("Could not create your project. Check your connection and try again."); }
+    finally { setBusy(false); }
+  }
+  return <><div className="studio-form">{field("new-name", "Project name", name, setName, "e.g. Practice planner")}{field("new-user", "Who is this for?", user, setUser, "One kind of person")}{field("new-problem", "What are they trying to do, and what gets in the way?", problem, setProblem, "Describe the hard part.", true)}{field("new-why", "Why does solving this matter?", why, setWhy, "What could get easier?")}</div>{coaching && <p className="studio-coach" role="status">A thought to help you shape it: {coaching}</p>}{message && <p role="alert">{message}</p>}<div className="studio-actions"><button className="button button-primary" disabled={!name.trim() || busy} onClick={() => void create()} type="button">{busy ? "Creating…" : "Create project →"}</button></div></>;
 }
 
 export function Studio({ onBack, courseComplete }: { onBack: () => void; courseComplete: boolean }) {
@@ -182,7 +194,7 @@ export function Studio({ onBack, courseComplete }: { onBack: () => void; courseC
     setBuilding(true);
     updateStudioProject(project.id, (current) => ({ ...setBuildState(current, "building", { attempts: (current.build?.attempts ?? 0) + 1, startedAt: new Date().toISOString() }), stage: current.stage }));
     try {
-      const request = { project: { name: project.name, user: project.user, problem: project.problem, why: project.why, behavior: project.behavior, constraints: project.constraints, inScope: project.features.filter((item) => item.inV1).map((item) => item.text), laterIdeas: project.features.filter((item) => !item.inV1).map((item) => item.text) }, mode: project.versions.length ? "iteration" : "initial", version: project.versions.length + 1, instruction: instruction.trim(), previous: project.versions.at(-1)?.result.artifact, observations: project.observations.slice(-8), feedback: project.feedback.slice(-8) };
+      const request = { appId: project.id, project: { name: project.name, user: project.user, problem: project.problem, why: project.why, behavior: project.behavior, constraints: project.constraints, inScope: project.features.filter((item) => item.inV1).map((item) => item.text), laterIdeas: project.features.filter((item) => !item.inV1).map((item) => item.text) }, mode: project.versions.length ? "iteration" : "initial", version: project.versions.length + 1, instruction: instruction.trim(), previous: project.versions.at(-1)?.result.artifact, observations: project.observations.slice(-8), feedback: project.feedback.slice(-8) };
       const response = await fetch("/api/studio/build", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(request) });
       const payload = await response.json() as { provider?: "openai" | "deterministic"; artifact?: unknown; attempts?: number; usage?: { inputTokens?: number; outputTokens?: number }; error?: string };
       if (!response.ok) throw new Error(payload.error || "The Builder couldn't finish this version. Your project is safe; try again.");
