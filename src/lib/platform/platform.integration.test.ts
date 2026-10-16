@@ -1,9 +1,14 @@
 import { randomUUID } from "node:crypto";
+import { rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { SharedAppRepository } from "@/lib/shared-apps/store";
 import { afterAll, afterEach, describe, expect, it } from "vitest";
 import { volunteerCoordinationV4 } from "@/lib/builder/v4-fixtures";
 import { campusEventOperationsV4 } from "@/lib/builder/v4-platform-fixtures";
 import { getPlatformPool, closePlatformDatabase } from "./database";
 import { PlatformError, PlatformRepository } from "./repository";
+import { importLegacySQLiteFile } from "./sqlite-import";
 import type { PlatformIdentity } from "./session";
 
 const enabled = Boolean(process.env.DATABASE_URL);
@@ -141,5 +146,26 @@ describe.skipIf(!enabled)("PostgreSQL platform repository", () => {
     expect(race.filter((result) => result.status === "fulfilled")).toHaveLength(1);
     expect(race.filter((result) => result.status === "rejected")).toHaveLength(1);
     expect((await pool().query("SELECT count(*) FROM runtime_records WHERE app_id=$1 AND environment='production' AND collection_id='registrations' AND data->>'volunteer_id'=$2", [app.id, volunteer.id])).rows[0].count).toBe("1");
+  });
+
+  it("dry-runs, imports, and safely replays a legacy SQLite V4 app", async () => {
+    const owner = await newUser("Legacy app owner");
+    const filename = join(tmpdir(), `buildloop-legacy-import-${randomUUID()}.sqlite`);
+    const legacy = new SharedAppRepository(filename);
+    try {
+      const published = legacy.publish("legacy-campus", 1, campusEventOperationsV4, { expectedPublishedVersion: null });
+      expect(published.published).toBe(true);
+      const dryRun = await importLegacySQLiteFile({ filename, ownerEmail: owner.email, pool: pool(), apply: false });
+      expect(dryRun).toMatchObject({ mode: "dry_run", appCount: 1 });
+      expect(await pool().query("SELECT count(*) FROM applications WHERE id=$1", [dryRun.results[0].appId])).toMatchObject({ rows: [{ count: "0" }] });
+      const applied = await importLegacySQLiteFile({ filename, ownerEmail: owner.email, pool: pool(), apply: true });
+      expect(applied).toMatchObject({ mode: "applied", results: [{ status: "imported", sourceAppId: "legacy-campus", versionCount: 1 }] });
+      trackedApps.push(applied.results[0].appId);
+      trackedProjects.push((await pool().query<{ project_id: string }>("SELECT project_id FROM applications WHERE id=$1", [applied.results[0].appId])).rows[0].project_id);
+      expect(await currentVersion(applied.results[0].appId)).toBe("v1");
+      const repeated = await importLegacySQLiteFile({ filename, ownerEmail: owner.email, pool: pool(), apply: true });
+      expect(repeated.results[0].status).toBe("already_imported");
+      expect(await pool().query("SELECT count(*) FROM applications WHERE id=$1", [applied.results[0].appId])).toMatchObject({ rows: [{ count: "1" }] });
+    } finally { legacy.close(); rmSync(filename, { force: true }); rmSync(`${filename}-wal`, { force: true }); rmSync(`${filename}-shm`, { force: true }); }
   });
 });

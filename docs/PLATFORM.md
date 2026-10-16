@@ -11,6 +11,14 @@ BuildLoop's platform layer uses PostgreSQL for app identity, memberships, versio
 
 `npm run db:generate` creates a SQL migration from `src/lib/platform/schema.ts`; review and commit that migration with the schema change. `npm run db:migrate` applies committed migrations. Do not use schema push against shared environments.
 
+To import previously published V4 shared apps from a Goal 12 SQLite file, first create the target owner's BuildLoop account and apply the PostgreSQL migrations. Then run a read-only dry run:
+
+```sh
+npm run db:import-sqlite -- --source .buildloop-data/shared.sqlite --owner-email owner@example.com
+```
+
+Review the app IDs and version counts. Add `--apply` to import all validated apps in one PostgreSQL transaction. The source SQLite file is opened read-only. Imports preserve V4 versions, the selected production version, its current records, preview records, and audit event details; legacy actor IDs are retained as audit metadata and attributed to the selected account. Stable IDs make an exact repeat safe. The tool stops before writing if a saved version, record, or audit entry is malformed. It does not import browser-local Mission progress or Studio coaching notes, and it does not convert non-V4 shared app schemas.
+
 ## Tenant model
 
 Each app has a platform owner, optional administrators, and members. Platform roles control project, membership, and publication operations. The separate `app_role` controls permissions defined by the selected V4 app artifact. Changing one role does not grant the other set of permissions. Every data query includes an app ID and environment, and composite foreign keys keep runtime rows attached to that tenant's preview or production environment.
@@ -33,5 +41,5 @@ Production must use HTTPS, a strong unique Better Auth secret, trusted configure
 
 - Mission progress and the Studio learner workflow (briefs, observations, feedback, and reflection) remain browser-local; only application records and platform metadata are shared across devices.
 - Invitations are copied and shared manually; email delivery is not configured.
-- App schema migration supports the validated V4 runtime path. Legacy SQLite shared-app data and local Studio projects are not automatically imported into PostgreSQL.
+- App schema migration supports the validated V4 runtime path. Legacy V4 SQLite shared apps have an explicit import command; local Studio projects and learner notes are not automatically imported into PostgreSQL.
 - There is no production deployment, hosted database, custom domain, realtime channel, team dashboard, or automated backup configuration in this checkout.
