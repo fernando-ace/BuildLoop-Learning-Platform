@@ -1,5 +1,6 @@
 node_modules/
 .next/
+.buildloop-data/
 coverage/
 test-results/
 playwright-report/

@@ -5,10 +5,7 @@ export type V4Scalar = string | number | boolean | null;
 export type V4UserField = "id" | "displayName" | { profile: string };
 export type V4OwnershipExpr =
   | { op: "equals"; left: { op: "recordField"; field: string }; right: { op: "userField"; field: V4UserField } }
-  | { op: "notEquals"; left: { op: "recordField"; field: string }; right: { op: "userField"; field: V4UserField } }
   | { op: "and"; items: V4OwnershipExpr[] }
-  | { op: "or"; items: V4OwnershipExpr[] }
-  | { op: "not"; value: V4OwnershipExpr };
 export interface V4Role { id: string; label: string }
 export interface V4AppUser { id: string; displayName: string; roles: string[]; profile?: Record<string, V4Scalar> }
 export type V4Operation = "read" | "create" | "update" | "delete";
@@ -43,9 +40,8 @@ const MAX_DEPTH = 8;
 
 function validOwnership(value: unknown, depth = 0): value is V4OwnershipExpr {
   if (depth > MAX_DEPTH || !object(value) || typeof value.op !== "string") return false;
-  if (value.op === "and" || value.op === "or") return ownKeys(value, ["op", "items"]) && Array.isArray(value.items) && value.items.length > 0 && value.items.length <= 8 && value.items.every((item) => validOwnership(item, depth + 1));
-  if (value.op === "not") return ownKeys(value, ["op", "value"]) && validOwnership(value.value, depth + 1);
-  if (value.op !== "equals" && value.op !== "notEquals") return false;
+  if (value.op === "and") return ownKeys(value, ["op", "items"]) && Array.isArray(value.items) && value.items.length > 0 && value.items.length <= 8 && value.items.every((item) => validOwnership(item, depth + 1));
+  if (value.op !== "equals") return false;
   if (!ownKeys(value, ["op", "left", "right"]) || !object(value.left) || !object(value.right)) return false;
   const record = value.left, user = value.right;
   return ownKeys(record, ["op", "field"]) && record.op === "recordField" && typeof record.field === "string" && ID.test(record.field) &&
@@ -88,7 +84,8 @@ export function validateArtifactV4(value: unknown): { ok: true; artifact: Genera
       issues.push("A permission is invalid or refers to a missing role or collection"); continue;
     }
     permissionIds.add(raw.id);
-    if (raw.collection === "activity" && (raw.operations.some((op) => op !== "read") || raw.visibility !== "all")) issues.push("Activity permissions can only allow all activity to be read");
+    if (raw.visibility === "public" && raw.operations.some((op) => op !== "read")) issues.push(`Public access for ${raw.id} can only allow records to be viewed`);
+    if (raw.collection === "activity" && (raw.operations.some((op) => op !== "read") || raw.visibility !== "all" || raw.fields !== undefined)) issues.push("Activity permissions can only allow all activity to be read");
     const collection = collectionMap.get(raw.collection);
     if (collection && Array.isArray(raw.fields)) {
       const declared = new Set([...collection.fields.map((field) => field.id), ...collection.relationships.map((relationship) => relationship.field), ...(collection.computed ?? []).map((computed) => computed.id)]);
@@ -115,6 +112,7 @@ export function validateArtifactV4(value: unknown): { ok: true; artifact: Genera
 
 export function toV3Artifact(artifact: GeneratedAppV4): GeneratedAppV3 {
   const { roles: _roles, users: _users, permissions: _permissions, workflowPermissions: _workflowPermissions, ...base } = artifact;
+  void _roles; void _users; void _permissions; void _workflowPermissions;
   return { ...base, format: "buildloop-app-v3" };
 }
 
@@ -131,11 +129,9 @@ function userField(user: V4AppUser, field: V4UserField): V4Scalar {
 
 export function evaluateOwnership(expression: V4OwnershipExpr, row: Record<string, unknown>, user: V4AppUser): boolean {
   if (expression.op === "and") return expression.items.every((item) => evaluateOwnership(item, row, user));
-  if (expression.op === "or") return expression.items.some((item) => evaluateOwnership(item, row, user));
-  if (expression.op === "not") return !evaluateOwnership(expression.value, row, user);
   const left = row[expression.left.field];
   const right = userField(user, expression.right.field);
-  return expression.op === "equals" ? left === right : left !== right;
+  return left === right;
 }
 
 export function canUsePermission(artifact: GeneratedAppV4, user: V4AppUser, collection: string, operation: V4Operation, row?: Record<string, unknown>): V4Permission | null {
@@ -158,6 +154,21 @@ export function filterVisibleRows(artifact: GeneratedAppV4, user: V4AppUser, col
   return result;
 }
 
+export function describeV4Permissions(artifact: GeneratedAppV4) {
+  const verbs: Record<V4Operation, string> = { read: "view", create: "add", update: "edit", delete: "remove" };
+  return artifact.roles.map((role) => {
+    const rules = artifact.permissions.filter((permission) => permission.role === role.id);
+    const can = rules.flatMap((permission) => permission.operations.map((operation) => {
+      const collection = artifact.collections.find((item) => item.id === permission.collection)?.label ?? (permission.collection === "activity" ? "activity" : permission.collection);
+      const scope = permission.visibility === "owned" ? "their own" : permission.visibility === "public" ? "public" : "all";
+      const fields = operation === "read" && permission.fields?.length ? ` (${permission.fields.map((field) => artifact.collections.find((item) => item.id === permission.collection)?.fields.find((item) => item.id === field)?.label ?? field).join(", ")})` : "";
+      return `${verbs[operation]} ${scope} ${collection.toLowerCase()}${fields}`;
+    }));
+    const workflows = artifact.workflowPermissions.filter((permission) => permission.roles.includes(role.id)).map((permission) => artifact.workflows.find((workflow) => workflow.id === permission.workflow)?.label).filter((label): label is string => Boolean(label));
+    return { role: role.label, can: [...new Set([...can, ...workflows.map((workflow) => `run ${workflow.toLowerCase()}`)])] };
+  });
+}
+
 export function stampOwnedFields(artifact: GeneratedAppV4, user: V4AppUser, collection: string, row: Record<string, unknown>) {
   const output = { ...row };
   for (const permission of artifact.permissions) {
@@ -165,8 +176,7 @@ export function stampOwnedFields(artifact: GeneratedAppV4, user: V4AppUser, coll
     const expression = permission.ownership;
     const visit = (expr: V4OwnershipExpr) => {
       if (expr.op === "equals" && expr.right.op === "userField" && expr.right.field === "id") output[expr.left.field] = user.id;
-      else if (expr.op === "and" || expr.op === "or") expr.items.forEach(visit);
-      else if (expr.op === "not") visit(expr.value);
+      else if (expr.op === "and") expr.items.forEach(visit);
     };
     visit(expression);
   }
