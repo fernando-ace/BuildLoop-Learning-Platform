@@ -16,6 +16,8 @@ Updated 2026-11-09 from the isolated `goal-14-production-readiness` worktree. Th
 
 The focused `src/lib/platform/email.test.ts` suite passed (4 tests) after hardening required verification/password-reset email delivery. Typecheck and lint completed successfully. Required account-action mail now surfaces a generic retryable error if Resend is unconfigured or rejects delivery; logs contain no recipient or action URL.
 
+The focused migration-target suite passed (12 tests). It covers remote and production opt-ins, production/local rejection including IPv6 loopback, Vercel environment mismatch, PostgreSQL URL validation, and TLS enforcement. Production accepts only `sslmode=require`, `verify-ca`, or `verify-full`; `prefer` and `allow` are rejected because they can fall back to plaintext. Typecheck and lint passed after this change.
+
 ## Browser and database checks
 
 `npm run test:e2e` ran 33 Chromium cases: 20 passed and 13 Studio cases failed during shared setup. The test-auth endpoint could not create its test user because this worktree has no `DATABASE_URL`. The 13 failures report `Test authentication is not configured.` and happen before the Studio flows run; they are environment-blocked, not passing Studio evidence.
