@@ -10,6 +10,7 @@ import { initialMission6Progress, initialMission6State, mission6Reducer, recordM
 
 const storageKey = "buildloop-learner-v2";
 const listeners = new Set<() => void>();
+let cloudSync: ((snapshot: Record<string, unknown>) => void) | null = null;
 let currentState = initialState;
 let learnerProgress = initialLearnerProgress;
 let mission2State = initialMission2State;
@@ -25,6 +26,10 @@ let mission6State = initialMission6State;
 let mission6Progress = initialMission6Progress;
 let activeMission: 0 | 1 | 2 | 3 | 4 | 5 | 6 = 1;
 let loaded = false;
+
+function safeMissionOneState() {
+  return currentState.buildIssues?.includes("persistence") ? { ...currentState, equipment: initialState.equipment } : currentState;
+}
 
 function ensureLoaded() {
   if (loaded || typeof window === "undefined") return;
@@ -82,6 +87,72 @@ export function getMissionState() {
 export function getLearnerProgress() {
   ensureLoaded();
   return learnerProgress;
+}
+
+export function getCloudLearnerSnapshot(): Record<string, unknown> {
+  ensureLoaded();
+  return {
+    activeMission,
+    mission1State: safeMissionOneState(),
+    mission1Progress: learnerProgress,
+    mission2State, mission2Progress, mission2AttemptCount,
+    mission3State, mission3Progress,
+    mission4State, mission4Progress,
+    mission5State, mission5Progress,
+    mission6State, mission6Progress,
+  };
+}
+
+export function getInitialCloudLearnerSnapshot(): Record<string, unknown> {
+  return {
+    activeMission: 1,
+    mission1State: initialState, mission1Progress: initialLearnerProgress,
+    mission2State: initialMission2State, mission2Progress: initialMission2Progress, mission2AttemptCount: 0,
+    mission3State: initialMission3State, mission3Progress: initialMission3Progress,
+    mission4State: initialMission4State, mission4Progress: initialMission4Progress,
+    mission5State: initialMission5State, mission5Progress: initialMission5Progress,
+    mission6State: initialMission6State, mission6Progress: initialMission6Progress,
+  };
+}
+
+export function configureLearnerCloudSync(sync: ((snapshot: Record<string, unknown>) => void) | null) {
+  cloudSync = sync;
+}
+
+export function readLocalLearnerSave() {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.localStorage.getItem(storageKey) ?? window.localStorage.getItem("buildloop-mission-v1");
+  } catch { return null; }
+}
+
+export function applyCloudLearnerSnapshot(value: Record<string, unknown>) {
+  if (typeof value.activeMission !== "number" || value.activeMission < 0 || value.activeMission > 6) return false;
+  const isRecord = (item: unknown): item is Record<string, unknown> => Boolean(item && typeof item === "object" && !Array.isArray(item));
+  const isMissionState = (item: unknown) => isRecord(item) && typeof item.stage === "number";
+  const isProgress = (item: unknown) => isRecord(item) && Array.isArray(item.attempts);
+  const isMissionOneProgress = (item: unknown) => isRecord(item) && typeof item.attempts === "number";
+  if (!isMissionState(value.mission1State) || !isMissionOneProgress(value.mission1Progress)) return false;
+  if (![2, 3, 4, 5, 6].every((number) => isMissionState(value[`mission${number}State`]) && isProgress(value[`mission${number}Progress`]))) return false;
+  ensureLoaded();
+  currentState = value.mission1State as unknown as MissionState;
+  currentState = safeMissionOneState();
+  learnerProgress = value.mission1Progress as unknown as LearnerProgress;
+  mission2State = value.mission2State as unknown as Mission2State;
+  mission2Progress = value.mission2Progress as unknown as Mission2Progress;
+  mission2AttemptCount = typeof value.mission2AttemptCount === "number" ? value.mission2AttemptCount : mission2Progress.attempts.length;
+  mission3State = value.mission3State as unknown as Mission3State;
+  mission3Progress = value.mission3Progress as unknown as Mission3Progress;
+  mission4State = value.mission4State as unknown as Mission4State;
+  mission4Progress = value.mission4Progress as unknown as Mission4Progress;
+  mission5State = value.mission5State as unknown as Mission5State;
+  mission5Progress = value.mission5Progress as unknown as Mission5Progress;
+  mission6State = value.mission6State as unknown as Mission6State;
+  mission6Progress = value.mission6Progress as unknown as Mission6Progress;
+  activeMission = value.activeMission as 0 | 1 | 2 | 3 | 4 | 5 | 6;
+  persist();
+  listeners.forEach((listener) => listener());
+  return true;
 }
 
 export function getServerLearnerProgress() {
@@ -238,11 +309,11 @@ export function dispatchMission(action: MissionAction) {
 function persist() {
   if (typeof window === "undefined") return;
   try {
-    const savedState = currentState.buildIssues?.includes("persistence")
-      ? { ...currentState, equipment: initialState.equipment }
-      : currentState;
-  window.localStorage.setItem(storageKey, JSON.stringify({ state: savedState, progress: learnerProgress, mission2State, mission2Progress, mission2AttemptCount, mission3State, mission3Progress, mission4State, mission4Progress, mission5State, mission5Progress, mission6State, mission6Progress, activeMission }));
+    const savedState = safeMissionOneState();
+    const snapshot = { state: savedState, progress: learnerProgress, mission2State, mission2Progress, mission2AttemptCount, mission3State, mission3Progress, mission4State, mission4Progress, mission5State, mission5Progress, mission6State, mission6Progress, activeMission };
+    window.localStorage.setItem(storageKey, JSON.stringify(snapshot));
   } catch {
     // The mission remains playable if local storage is unavailable.
   }
+  try { cloudSync?.(getCloudLearnerSnapshot()); } catch { /* A sync callback must not interrupt local learner actions. */ }
 }

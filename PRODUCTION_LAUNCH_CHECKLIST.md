@@ -11,7 +11,8 @@
 - [x] Better Auth email/password identities and server-side app membership authorization exist.
 - [x] Existing app versions, preview/production runtime, publication, and rollback are PostgreSQL-backed.
 - [x] Generated app execution remains declarative and constrained.
-- [ ] Mission and Studio learning records follow a signed-in learner across devices.
+- [x] Six Missions' checkpoints and attempt/skill progress persist per authenticated learner, migrate a local save when no account record exists, and use revision checks for multi-device writes.
+- [ ] Studio's personal coaching and reflection notes follow their learner across devices without becoming visible to other app members.
 - [ ] Invitation email is delivered and resend behavior is verified.
 - [ ] Shared rate limiting is active for paid/abuse-sensitive operations.
 - [ ] External error monitoring is configured and a safe test event is verified.

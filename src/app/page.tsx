@@ -1,6 +1,7 @@
 "use client";
 
-import { useSyncExternalStore, useState, type Dispatch, type ReactNode } from "react";
+import { useEffect, useSyncExternalStore, useState, type Dispatch, type ReactNode } from "react";
+import Link from "next/link";
 import {
   costOf,
   evaluateBrief,
@@ -34,6 +35,7 @@ import { mission6Definition, type Mission6Progress, type Mission6State } from "@
 import { dispatchMission2, dispatchMission3, dispatchMission4, dispatchMission5, dispatchMission6, getMission6Progress, getMission6State, getServerMission6Progress, getServerMission6State, startMission6 } from "@/lib/store";
 import { Studio } from "@/app/components/studio";
 import { getServerStudioState, getStudioState, openStudioProject, showMissions, showStudioHub, subscribeStudio } from "@/lib/studio-store";
+import { getLearnerSyncState, initializeLearnerCloudSync, keepThisBrowserProgress, retryLearnerCloudSync, selectAccountProgress, subscribeLearnerSync } from "@/lib/learner-cloud-sync";
 
 const subscribeToHydration = () => () => {};
 const clientReadySnapshot = () => true;
@@ -328,7 +330,7 @@ function ResultsStage({ state, dispatch }: { state: MissionState; dispatch: Disp
     <div className="score-section"><div className="section-label"><span className="eyebrow">YOUR BUILDER SKILLS</span><span>Based on the choices you made</span></div><div className="score-grid">{scores.map((item) => <article className="score-card" key={item.name}><div className="score-top"><h2>{item.name}</h2><strong>{skillLabel(item.score)}</strong></div><div className="score-track"><span style={{ width: `${item.score}%` }} /></div><p>{item.explanation}</p></article>)}</div></div>
     <details className="summary-details" open><summary><span>Builder summary</span><span className="summary-expand">YOUR MISSION RECORD · ATTEMPT {getLearnerProgress().currentAttempt}</span></summary><div className="summary-grid"><SummaryItem label="USER" value={summary.user} /><SummaryItem label="PROBLEM YOU IDENTIFIED" value={summary.problem} /><SummaryItem label="FIRST VERSION" value={summary.mvp.length ? summary.mvp.join(" · ") : "No features selected"} /><SummaryItem label="WHAT YOU TOLD THE AI" value={summary.brief} /><SummaryItem label="WHAT THE AI BUILT" value={summary.buildOutcome} /><SummaryItem label="WHAT HAPPENED WHEN YOU TRIED IT" value={summary.tests.length ? summary.tests.map((test) => `${test.name}: ${test.result?.detail ?? "not recorded"}`).join(" · ") : "No tests run"} /><SummaryItem label="FEEDBACK YOU NOTICED" value={summary.feedback.length ? summary.feedback.join(" · ") : "No feedback selected"} /><SummaryItem label="FEEDBACK YOU ACTED ON" value={summary.feedbackActedOn} /><SummaryItem label="CHANGE YOU MADE" value={summary.changeMade} /><SummaryItem label="WHAT YOU SHIPPED" value={summary.shipped} /></div><div className="summary-equipment"><span className="eyebrow">FINAL PRODUCT STATE</span>{summary.finalEquipment.map((item) => <span key={item.name}>{item.name}<strong>{item.borrower}</strong></span>)}</div></details>
     <section className="lesson-section"><span className="eyebrow">WHAT YOUR CHOICES TAUGHT YOU</span><div>{summary.lessons.map((lesson) => <p key={lesson}><span aria-hidden="true">↗</span>{lesson}</p>)}</div></section>
-    <div className="result-actions"><span>Your mission and skill progress are saved on this device.</span><button className="button button-quiet" onClick={() => dispatch({ type: "START" })} type="button">Replay Mission <span aria-hidden="true">↺</span></button><button className="button button-primary" onClick={() => dispatch({ type: "RESET" })} type="button">Return to Missions <span aria-hidden="true">→</span></button></div>
+    <div className="result-actions"><span>Your mission and skill progress stay on this device and sync to your account when signed in.</span><button className="button button-quiet" onClick={() => dispatch({ type: "START" })} type="button">Replay Mission <span aria-hidden="true">↺</span></button><button className="button button-primary" onClick={() => dispatch({ type: "RESET" })} type="button">Return to Missions <span aria-hidden="true">→</span></button></div>
   </>;
 }
 
@@ -338,6 +340,8 @@ function SummaryItem({ label, value }: { label: string; value: string }) {
 
 export default function MissionPage() {
   const hydrated = useSyncExternalStore(subscribeToHydration, clientReadySnapshot, serverReadySnapshot);
+  const learnerSyncState = useSyncExternalStore(subscribeLearnerSync, getLearnerSyncState, () => "loading");
+  useEffect(() => { if (hydrated) void initializeLearnerCloudSync(); }, [hydrated]);
   const state = useSyncExternalStore(subscribeMission, getMissionState, getServerMissionState);
   const learnerProgress = useSyncExternalStore(subscribeMission, getLearnerProgress, getServerLearnerProgress);
   const mission2State = useSyncExternalStore(subscribeMission, getMission2State, getServerMission2State);
@@ -355,13 +359,13 @@ export default function MissionPage() {
   const dispatch = dispatchMission;
   const courseScoreSets = [learnerProgress.bestSkillResults, mission2Progress.bestSkillResults, mission3Progress.bestSkillResults, mission4Progress.bestSkillResults, mission5Progress.bestSkillResults, mission6Progress.bestSkillResults];
   const courseSkills = learnerSkills.map((name) => ({ name, score: Math.max(0, ...courseScoreSets.flat().filter((item) => item.name === name).map((item) => item.score)) }));
-  if (studioState.screen !== "missions") return <div data-hydrated={hydrated}><Studio courseComplete={mission6Progress.completed} onBack={() => { if (activeMission === 6) dispatchMission6({ type: "RETURN" }); else if (activeMission === 5) dispatchMission5({ type: "RETURN" }); else if (activeMission === 4) dispatchMission4({ type: "RETURN" }); else if (activeMission === 3) dispatchMission3({ type: "RETURN" }); else if (activeMission === 2) dispatchMission2({ type: "RETURN" }); showMissions(); }} /></div>;
-  if (activeMission === 6 && mission6State.stage > 0) return <div data-hydrated={hydrated}><MissionSixPlayer state={mission6State} progress={mission6Progress} courseSkills={courseSkills} onStartStudio={() => openStudioProject(null)} /></div>;
-  if (activeMission === 5 && mission5State.stage > 0) return <div data-hydrated={hydrated}><MissionFivePlayer state={mission5State} progress={mission5Progress} /></div>;
-  if (activeMission === 4 && mission4State.stage > 0) return <div data-hydrated={hydrated}><MissionFourPlayer state={mission4State} progress={mission4Progress} /></div>;
-  if (activeMission === 3 && mission3State.stage > 0) return <div data-hydrated={hydrated}><MissionThreePlayer state={mission3State} progress={mission3Progress} /></div>;
-  if (activeMission === 2 && mission2State.stage > 0) return <div data-hydrated={hydrated}><MissionTwoPlayer state={mission2State} progress={mission2Progress} attemptCount={mission2Progress.attempts.length + 1} /></div>;
-  if (activeMission === 0 || state.stage === 0) return <div data-hydrated={hydrated}><MissionHub state={state} progress={learnerProgress} mission2State={mission2State} mission2Progress={mission2Progress} mission3State={mission3State} mission3Progress={mission3Progress} mission4State={mission4State} mission4Progress={mission4Progress} mission5State={mission5State} mission5Progress={mission5Progress} mission6State={mission6State} mission6Progress={mission6Progress} onStart={() => dispatch({ type: "START" })} onStart2={startMission2} onStart3={startMission3} onStart4={startMission4} onStart5={startMission5} onStart6={startMission6} onOpenStudio={showStudioHub} /></div>;
+  if (studioState.screen !== "missions") return <div data-hydrated={hydrated}><LearnerSyncNotice state={learnerSyncState} /><Studio courseComplete={mission6Progress.completed} onBack={() => { if (activeMission === 6) dispatchMission6({ type: "RETURN" }); else if (activeMission === 5) dispatchMission5({ type: "RETURN" }); else if (activeMission === 4) dispatchMission4({ type: "RETURN" }); else if (activeMission === 3) dispatchMission3({ type: "RETURN" }); else if (activeMission === 2) dispatchMission2({ type: "RETURN" }); showMissions(); }} /></div>;
+  if (activeMission === 6 && mission6State.stage > 0) return <div data-hydrated={hydrated}><LearnerSyncNotice state={learnerSyncState} /><MissionSixPlayer state={mission6State} progress={mission6Progress} courseSkills={courseSkills} onStartStudio={() => openStudioProject(null)} /></div>;
+  if (activeMission === 5 && mission5State.stage > 0) return <div data-hydrated={hydrated}><LearnerSyncNotice state={learnerSyncState} /><MissionFivePlayer state={mission5State} progress={mission5Progress} /></div>;
+  if (activeMission === 4 && mission4State.stage > 0) return <div data-hydrated={hydrated}><LearnerSyncNotice state={learnerSyncState} /><MissionFourPlayer state={mission4State} progress={mission4Progress} /></div>;
+  if (activeMission === 3 && mission3State.stage > 0) return <div data-hydrated={hydrated}><LearnerSyncNotice state={learnerSyncState} /><MissionThreePlayer state={mission3State} progress={mission3Progress} /></div>;
+  if (activeMission === 2 && mission2State.stage > 0) return <div data-hydrated={hydrated}><LearnerSyncNotice state={learnerSyncState} /><MissionTwoPlayer state={mission2State} progress={mission2Progress} attemptCount={mission2Progress.attempts.length + 1} /></div>;
+  if (activeMission === 0 || state.stage === 0) return <div data-hydrated={hydrated}><LearnerSyncNotice state={learnerSyncState} /><MissionHub state={state} progress={learnerProgress} mission2State={mission2State} mission2Progress={mission2Progress} mission3State={mission3State} mission3Progress={mission3Progress} mission4State={mission4State} mission4Progress={mission4Progress} mission5State={mission5State} mission5Progress={mission5Progress} mission6State={mission6State} mission6Progress={mission6Progress} onStart={() => dispatch({ type: "START" })} onStart2={startMission2} onStart3={startMission3} onStart4={startMission4} onStart5={startMission5} onStart6={startMission6} onOpenStudio={showStudioHub} /></div>;
   let stageView: ReactNode;
   switch (state.stage) {
     case 1: stageView = <Discovery state={state} dispatch={dispatch} />; break;
@@ -374,5 +378,18 @@ export default function MissionPage() {
     case 8: stageView = <IterationStage state={state} dispatch={dispatch} />; break;
     default: stageView = <ResultsStage state={state} dispatch={dispatch} />;
   }
-  return <div data-hydrated={hydrated}><PageFrame state={state} dispatch={dispatch}>{stageView}</PageFrame></div>;
+  return <div data-hydrated={hydrated}><LearnerSyncNotice state={learnerSyncState} /><PageFrame state={state} dispatch={dispatch}>{stageView}</PageFrame></div>;
+}
+
+function LearnerSyncNotice({ state }: { state: string }) {
+  if (state === "loading" || state === "synced") return null;
+  const conflict = state === "conflict";
+  const text = conflict
+    ? "This browser and your account both have learning progress. Choose which copy to keep; the other copy is preserved on this device."
+    : state === "unavailable"
+      ? "Account sync is temporarily unavailable. Your progress is still saved on this device."
+      : state === "syncing"
+        ? "Syncing your progress to your account…"
+        : "Sign in to keep your learning progress with your account across devices. This browser also keeps a local copy.";
+  return <aside className="learner-sync-notice" role="status"><span>{text}</span>{conflict ? <span className="learner-sync-actions"><button className="button button-quiet" onClick={() => void selectAccountProgress()} type="button">Use account progress</button><button className="button button-primary" onClick={() => void keepThisBrowserProgress()} type="button">Keep this browser’s progress</button></span> : state === "local" ? <Link href="/sign-in">Sign in</Link> : state === "unavailable" ? <button className="button button-quiet" onClick={retryLearnerCloudSync} type="button">Retry sync</button> : null}</aside>;
 }

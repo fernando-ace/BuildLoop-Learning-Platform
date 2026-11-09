@@ -13,6 +13,27 @@ export const platformUsers = pgTable("platform_users", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [uniqueIndex("platform_users_email_uq").on(table.email)]);
 
+/** Private course progress. Each mission checkpoint and attempt history is stored independently per learner. */
+export const learnerProgress = pgTable("learner_progress", {
+  userId: text("user_id").primaryKey().references(() => platformUsers.id, { onDelete: "cascade" }),
+  activeMission: integer("active_mission").notNull().default(1),
+  mission1State: jsonb("mission_1_state").notNull().default({}),
+  mission1Progress: jsonb("mission_1_progress").notNull().default({}),
+  mission2State: jsonb("mission_2_state").notNull().default({}),
+  mission2Progress: jsonb("mission_2_progress").notNull().default({}),
+  mission2AttemptCount: integer("mission_2_attempt_count").notNull().default(0),
+  mission3State: jsonb("mission_3_state").notNull().default({}),
+  mission3Progress: jsonb("mission_3_progress").notNull().default({}),
+  mission4State: jsonb("mission_4_state").notNull().default({}),
+  mission4Progress: jsonb("mission_4_progress").notNull().default({}),
+  mission5State: jsonb("mission_5_state").notNull().default({}),
+  mission5Progress: jsonb("mission_5_progress").notNull().default({}),
+  mission6State: jsonb("mission_6_state").notNull().default({}),
+  mission6Progress: jsonb("mission_6_progress").notNull().default({}),
+  revision: integer("revision").notNull().default(1),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [check("learner_progress_active_mission_valid", sql`${table.activeMission} between 0 and 6`), check("learner_progress_revision_positive", sql`${table.revision} > 0`)]);
+
 export const authSessions = pgTable("auth_sessions", {
   id: text("id").primaryKey(),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),

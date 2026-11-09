@@ -109,6 +109,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, summary:focus
 .button-primary { background: var(--blue); color: white; }
 .button-primary:hover:not(:disabled) { background: var(--blue-dark); }
 .button-primary span { font-size: 17px; font-weight: 400; }
+.learner-sync-notice { position: relative; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px 16px; padding: 10px 20px; border-bottom: 1px solid #d9e2ed; background: #f2f6fc; color: #34465e; font-size: 13px; text-align: center; }
+.learner-sync-notice a { color: #2459bd; font-weight: 700; }
+.learner-sync-actions { display: inline-flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.learner-sync-actions .button { min-height: 34px; padding: 7px 12px; font-size: 12px; }
 .button-quiet { border-color: var(--line); background: white; color: #4f5967; }
 .button-quiet:hover:not(:disabled) { border-color: #bcc6d3; background: #fafbfd; }
 .continue-secondary { position: absolute; right: 0; top: -12px; transform: translateY(-100%); }

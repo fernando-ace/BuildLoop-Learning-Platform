@@ -8,6 +8,13 @@
       "when": 1792127449563,
       "tag": "0000_broad_the_leader",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1794206327976,
+      "tag": "0001_learner_progress",
+      "breakpoints": true
     }
   ]
 }
