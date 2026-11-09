@@ -49,7 +49,8 @@ Production must use HTTPS, a strong unique Better Auth secret, trusted configure
 
 ## Current boundaries
 
-- Mission progress and the Studio learner workflow (briefs, observations, feedback, and reflection) remain browser-local; only application records and platform metadata are shared across devices.
+- Mission progress and Studio learner workflow records (briefs, observations, feedback, reflection, and per-version learning notes) sync to PostgreSQL per authenticated learner and use revision checks across devices. Browser copies remain for cache, migration, and conflict recovery; they are not the authoritative account record after synchronization.
+- V2 and V3 interactive preview snapshots remain browser-local and small; they are not a cross-device published runtime. V4 app preview and production runtime records, app versions, and publication state are in PostgreSQL. V1 legacy apps remain accessible through the documented import path.
 - Invitation and account email delivery use the Resend API boundary; delivery is inactive until provider credentials and a verified sender are configured.
-- App schema migration supports the validated V4 runtime path. Legacy V4 SQLite shared apps have an explicit import command; local Studio projects and learner notes are not automatically imported into PostgreSQL.
+- App schema migration supports the validated V4 runtime path. Legacy V4 SQLite shared apps have an explicit import command. Local browser project copies are retained and offered through the Studio synchronization/conflict flow; only the documented learner workflow fields and platform-owned app records are synchronized to PostgreSQL.
 - There is no production deployment, hosted database, custom domain, realtime channel, team dashboard, or automated backup configuration in this checkout.
