@@ -22,6 +22,8 @@ Responses contain status, timestamp, environment, release, and app version; read
 
 The Sentry integration captures uncaught server/request and client errors when the appropriate DSN is configured. Event scrubbing removes request bodies, headers, query strings, user identity, extra payloads, breadcrumb content, and invitation tokens. The fixed test event is available only in development/test with `BUILDLOOP_MONITORING_TEST=1`; POST `/api/monitoring/test` and confirm the event in Sentry before launch. Configure source-map upload separately if readable production stacks are required. Structured logs currently cover health and database-pool failures; do not log passwords, session tokens, database URLs, API keys, or learner prose.
 
+Builder generation and Better Auth authentication use shared PostgreSQL fixed-window rate limits. A missing/unavailable limiter table fails closed: auth requests fail and Builder calls return 503. The Builder allowance is five requests per learner per minute; authentication uses Better Auth's configured endpoint-specific windows and ceilings. Check PostgreSQL readiness and migration `0004_shared_operation_rate_limits` when those requests fail.
+
 ## Database backups and recovery
 
 No production database is connected from this checkout, so backups are not active yet. For the selected managed PostgreSQL service, enable automated daily backups at minimum and point-in-time recovery if the chosen plan supports it. Set a minimum 7-day retention before launch. Initial planning assumptions are RPO ≤24 hours with daily backups (≤5 minutes only if PITR is confirmed) and RTO ≤4 hours; measure and revise these after a restore drill.

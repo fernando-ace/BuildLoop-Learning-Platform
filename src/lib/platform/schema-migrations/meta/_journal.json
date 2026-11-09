@@ -29,6 +29,13 @@
       "when": 1794208823451,
       "tag": "0003_studio_project_tombstones",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1794209352358,
+      "tag": "0004_shared_operation_rate_limits",
+      "breakpoints": true
     }
   ]
 }

@@ -5,11 +5,11 @@ import { getPlatformRepository, PlatformError } from "@/lib/platform/repository"
 import { sameOrigin } from "@/lib/platform/http";
 import { logEvent } from "@/lib/platform/logger";
 import * as Sentry from "@sentry/nextjs";
+import { consumeOperationLimit } from "@/lib/platform/rate-limit";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-const hits = new Map<string, number[]>();
 const limits = { name: 80, user: 500, problem: 1000, why: 500, behavior: 1000, constraints: 1000 };
 
 function isBoundedText(value: unknown, max: number): value is string { return typeof value === "string" && value.length <= max; }
@@ -19,11 +19,12 @@ export async function POST(request: Request) {
   const identity = await getPlatformIdentity(request);
   if (!identity) return Response.json({ error: "Sign in to build in Studio." }, { status: 401, headers: { "Cache-Control": "no-store" } });
   if (process.env.BUILDLOOP_BUILDER_MODE !== "deterministic") {
-    const forwarded = request.headers.get("x-forwarded-for")?.split(",");
-    const ip = forwarded?.at(-1)?.trim() || "local";
-    const now = Date.now(); const recent = (hits.get(ip) ?? []).filter((at) => now - at < 60_000);
-    if (recent.length >= 5) return Response.json({ error: "Too many builds just now. Wait a minute and try again." }, { status: 429 });
-    recent.push(now); hits.set(ip, recent);
+    try {
+      const quota = await consumeOperationLimit(`builder:${identity.id}`, 5, 60);
+      if (!quota.allowed) return Response.json({ error: "Too many builds just now. Wait a minute and try again." }, { status: 429, headers: { "Retry-After": String(quota.retryAfterSeconds), "Cache-Control": "no-store" } });
+    } catch {
+      return Response.json({ error: "The Builder is temporarily unavailable. Try again shortly." }, { status: 503, headers: { "Cache-Control": "no-store" } });
+    }
   }
   let body: unknown;
   try { const raw = await request.text(); if (raw.length > MAX_BUILDER_INPUT_CHARS * 2) return Response.json({ error: "This project brief is too long to build." }, { status: 413 }); body = JSON.parse(raw); } catch { return Response.json({ error: "The Builder request was incomplete." }, { status: 400 }); }

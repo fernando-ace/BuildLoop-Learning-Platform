@@ -2,6 +2,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { POST } from "./route";
 import { issueTestSession, testCookieName } from "@/lib/platform/session";
 
+const { consumeLimit } = vi.hoisted(() => ({ consumeLimit: vi.fn() }));
+vi.mock("@/lib/platform/rate-limit", () => ({ consumeOperationLimit: consumeLimit }));
+
 const payload = { appId: "app_12345678-1234-1234-1234-123456789abc", project: { name: "Study tracker", user: "Students", problem: "They lose track of practice", why: "Study time matters", behavior: "Add a topic", constraints: "Phone friendly", inScope: ["Track a topic"], laterIdeas: ["Share with friends"] }, mode: "initial", version: 1, instruction: "Build a simple topic tracker", observations: [], feedback: [] };
 function request(body: unknown, headers: Record<string, string> = {}) {
   vi.stubEnv("BUILDLOOP_AUTH_MODE", "test"); vi.stubEnv("BUILDLOOP_TEST_AUTH_SECRET", "unit-test-secret-with-at-least-32-characters");
@@ -9,7 +12,7 @@ function request(body: unknown, headers: Record<string, string> = {}) {
   return new Request("http://localhost/api/studio/build", { method: "POST", headers: { host: "localhost", origin: "http://localhost", "content-type": "application/json", cookie, ...headers }, body: JSON.stringify(body) });
 }
 
-afterEach(() => vi.unstubAllEnvs());
+afterEach(() => { vi.unstubAllEnvs(); consumeLimit.mockReset().mockResolvedValue({ allowed: true, retryAfterSeconds: 60 }); });
 
 describe("Studio Builder route", () => {
   it("returns a deterministic valid artifact for a same-origin bounded request", async () => {
@@ -47,10 +50,13 @@ describe("Studio Builder route", () => {
     expect(JSON.stringify(result)).not.toContain("OPENAI_API_KEY");
   });
 
-  it("limits repeated builds in one server process", async () => {
+  it("uses the shared learner quota and returns a retry delay when exhausted", async () => {
     vi.stubEnv("BUILDLOOP_BUILDER_MODE", "openai"); vi.stubEnv("OPENAI_API_KEY", "");
-    const headers = { "x-forwarded-for": "192.0.2.5, 203.0.113.250" };
-    for (let i = 0; i < 5; i += 1) expect((await POST(request(payload, headers))).status).toBe(503);
-    expect((await POST(request(payload, headers))).status).toBe(429);
+    for (let i = 0; i < 5; i += 1) expect((await POST(request(payload))).status).toBe(503);
+    consumeLimit.mockResolvedValueOnce({ allowed: false, retryAfterSeconds: 23 });
+    const response = await POST(request(payload));
+    expect(response.status).toBe(429);
+    expect(response.headers.get("retry-after")).toBe("23");
+    expect(consumeLimit).toHaveBeenCalledWith("builder:test-owner", 5, 60);
   });
 });

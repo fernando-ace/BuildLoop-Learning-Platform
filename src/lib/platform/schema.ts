@@ -34,6 +34,13 @@ export const learnerProgress = pgTable("learner_progress", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [check("learner_progress_active_mission_valid", sql`${table.activeMission} between 0 and 6`), check("learner_progress_revision_positive", sql`${table.revision} > 0`)]);
 
+/** Shared fixed-window operation limits across serverless instances. */
+export const operationRateLimits = pgTable("operation_rate_limits", {
+  key: text("key").primaryKey(),
+  windowStartedAt: timestamp("window_started_at", { withTimezone: true }).notNull(),
+  requestCount: integer("request_count").notNull(),
+}, (table) => [check("operation_rate_limits_count_positive", sql`${table.requestCount} > 0`)]);
+
 export const authSessions = pgTable("auth_sessions", {
   id: text("id").primaryKey(),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),

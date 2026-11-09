@@ -6,6 +6,7 @@ import { authAccounts, authSessions, authVerifications, platformUsers } from "./
 import { getBuildLoopEnvironment, getPublicAppUrl } from "./config";
 import { sendAccountActionEmail } from "./email";
 import { logEvent } from "./logger";
+import { consumeOperationLimit } from "./rate-limit";
 
 async function deliverAuthEmail(kind: "verification" | "password_reset", message: Parameters<typeof sendAccountActionEmail>[0]) {
   const status = await sendAccountActionEmail(message);
@@ -53,7 +54,17 @@ function createAuth() {
       },
     },
     session: { expiresIn: 60 * 60 * 24 * 7, updateAge: 60 * 60 * 24 },
-    rateLimit: { enabled: true, window: 60, max: 10 },
+    rateLimit: {
+      enabled: true,
+      window: 60,
+      max: 10,
+      customStorage: {
+        consume: async (key, rule) => {
+          const result = await consumeOperationLimit(`auth:${key}`, rule.max, rule.window);
+          return { allowed: result.allowed, retryAfter: result.allowed ? null : result.retryAfterSeconds };
+        },
+      },
+    },
     advanced: { useSecureCookies: environment === "production" || environment === "preview", cookiePrefix: "buildloop" },
   });
 }
