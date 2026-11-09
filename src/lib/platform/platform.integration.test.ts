@@ -10,6 +10,8 @@ import { getPlatformPool, closePlatformDatabase } from "./database";
 import { PlatformError, PlatformRepository } from "./repository";
 import { importLegacySQLiteFile } from "./sqlite-import";
 import { consumeOperationLimit } from "./rate-limit";
+import { readLearnerProgress, writeLearnerProgress } from "./learner-progress";
+import { archiveStudioProject, listStudioApplications, listStudioLearnerProgress, writeStudioLearnerProgress } from "./studio-learner-progress";
 import type { PlatformIdentity } from "./session";
 
 const enabled = Boolean(process.env.DATABASE_URL);
@@ -50,6 +52,45 @@ afterEach(async () => {
 afterAll(async () => { if (enabled) await closePlatformDatabase(); });
 
 describe.skipIf(!enabled)("PostgreSQL platform repository", () => {
+  it("persists Mission progress per learner and isolates collaborative Studio reflections", async () => {
+    const owner = await newUser("Studio owner"), collaborator = await newUser("Studio collaborator");
+    const app = await newApp(owner);
+    await pool().query("INSERT INTO application_memberships(app_id,user_id,platform_role,app_role) VALUES($1,$2,'member','editor')", [app.id, collaborator.id]);
+    await pool().query("UPDATE studio_projects SET brief=$2::jsonb WHERE id=$1", [app.projectId, JSON.stringify({ user: "Owner-only brief" })]);
+
+    const missionSnapshot = {
+      activeMission: 3,
+      mission1State: { stage: 5 }, mission1Progress: { completed: true, attempts: [{ score: 90 }] },
+      mission2State: { stage: 4 }, mission2Progress: { completed: true, attempts: [{ score: 85 }] }, mission2AttemptCount: 1,
+      mission3State: { stage: 2 }, mission3Progress: { completed: false, attempts: [] },
+      mission4State: {}, mission4Progress: {}, mission5State: {}, mission5Progress: {}, mission6State: {}, mission6Progress: {},
+    };
+    await writeLearnerProgress(owner.id, null, missionSnapshot);
+    expect(await readLearnerProgress(owner.id)).toMatchObject({ activeMission: 3, mission2AttemptCount: 1 });
+    expect(await readLearnerProgress(collaborator.id)).toBeNull();
+
+    const snapshot = (problem: string) => ({
+      stage: "feedback",
+      projectNotes: { user: "A student", problem, why: "Practice helps", behavior: "Track tasks", constraints: "", instruction: "Build a task list", brief: null, nextGoal: "Try it", shareDecision: "" },
+      features: [], observations: [], feedback: [], versionNotes: [],
+    });
+    const ownerProgress = await writeStudioLearnerProgress(owner.id, app.id, null, snapshot("Owner private reflection"));
+    await writeStudioLearnerProgress(collaborator.id, app.id, null, snapshot("Collaborator private reflection"));
+    expect((await listStudioLearnerProgress(owner.id)).map((row) => row.projectNotes.problem)).toEqual(["Owner private reflection"]);
+    expect((await listStudioLearnerProgress(collaborator.id)).map((row) => row.projectNotes.problem)).toEqual(["Collaborator private reflection"]);
+
+    const ownerLibrary = await listStudioApplications(owner.id);
+    const collaboratorLibrary = await listStudioApplications(collaborator.id);
+    expect(ownerLibrary[0].brief).toEqual({ user: "Owner-only brief" });
+    expect(collaboratorLibrary[0].brief).toEqual({});
+
+    await expect(writeStudioLearnerProgress(owner.id, app.id, ownerProgress.revision - 1, snapshot("Stale overwrite"))).rejects.toMatchObject({ code: "conflict" });
+    await archiveStudioProject(owner.id, app.id);
+    expect(await listStudioApplications(owner.id)).toEqual([]);
+    expect(await listStudioApplications(collaborator.id)).toHaveLength(1);
+    expect((await listStudioLearnerProgress(collaborator.id))[0].projectNotes.problem).toBe("Collaborator private reflection");
+  });
+
   it("enforces a shared rate limit atomically under concurrent requests", async () => {
     const key = `integration:${randomUUID()}`;
     try {
