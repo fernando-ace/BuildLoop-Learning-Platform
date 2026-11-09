@@ -2,6 +2,8 @@ import "server-only";
 
 export type BuildLoopEnvironment = "development" | "test" | "preview" | "production";
 
+export type HostedReadinessCheck = "configured" | "unavailable" | "not_required";
+
 export function getBuildLoopEnvironment(): BuildLoopEnvironment {
   const explicit = process.env.BUILDLOOP_ENVIRONMENT;
   const inferred = process.env.VERCEL_ENV === "preview" ? "preview" : process.env.VERCEL_ENV === "production" ? "production" : process.env.NODE_ENV;
@@ -13,6 +15,35 @@ export function getBuildLoopEnvironment(): BuildLoopEnvironment {
     throw new Error("BUILDLOOP_ENVIRONMENT must match VERCEL_ENV.");
   }
   return value;
+}
+
+export function getHostedReadinessChecks(): { authentication: HostedReadinessCheck; email: HostedReadinessCheck; builder: HostedReadinessCheck; monitoring: HostedReadinessCheck } {
+  if (getBuildLoopEnvironment() !== "preview" && getBuildLoopEnvironment() !== "production") {
+    return { authentication: "not_required", email: "not_required", builder: "not_required", monitoring: "not_required" };
+  }
+
+  const secret = process.env.BETTER_AUTH_SECRET;
+  const publicAppUrl = process.env.PUBLIC_APP_URL;
+  const authUrl = process.env.BETTER_AUTH_URL ?? publicAppUrl;
+  let authentication: HostedReadinessCheck = "unavailable";
+  if (secret && secret.length >= 32 && publicAppUrl && authUrl) {
+    try {
+      const publicOrigin = new URL(publicAppUrl);
+      const authOrigin = new URL(authUrl);
+      if (!publicOrigin.username && !publicOrigin.password && publicOrigin.origin === publicAppUrl.replace(/\/$/, "") && publicOrigin.protocol === "https:" && authOrigin.origin === publicOrigin.origin && !authOrigin.username && !authOrigin.password) {
+        authentication = "configured";
+      }
+    } catch {
+      // Invalid origins remain an unavailable readiness check; never return their values.
+    }
+  }
+
+  return {
+    authentication,
+    email: process.env.RESEND_API_KEY && process.env.EMAIL_FROM ? "configured" : "unavailable",
+    builder: process.env.OPENAI_API_KEY ? "configured" : "unavailable",
+    monitoring: process.env.SENTRY_DSN && process.env.NEXT_PUBLIC_SENTRY_DSN ? "configured" : "unavailable",
+  };
 }
 
 export function getPublicAppUrl(requestUrl?: string) {

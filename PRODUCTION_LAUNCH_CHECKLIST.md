@@ -8,7 +8,7 @@
 - [x] Production migration command rejects localhost.
 - [x] Production migration command requires TLS-enforcing `sslmode=require`, `verify-ca`, or `verify-full`; it rejects plaintext-fallback modes.
 - [x] Production application database startup uses the same TLS and loopback validation before creating a connection pool.
-- [x] Liveness and PostgreSQL readiness endpoints expose redacted release metadata.
+- [x] Liveness and readiness endpoints expose redacted release metadata; hosted readiness checks PostgreSQL, migrations, and required authentication, email, Builder, and monitoring configuration without returning secret values.
 - [x] Sentry server/client integration and development-only verification endpoint are implemented with learner-content scrubbing.
 - [x] The Sentry runtime-injection package is kept external from the Next.js server bundle; the local production server starts without the prior hook-resolution warning.
 - [x] CI workflow runs against a disposable PostgreSQL 17 service.
@@ -31,7 +31,7 @@
 - [x] Create a dedicated Vercel Next.js project shell and set its Node runtime to 22.x; no Git connection or deployment was started.
 - [ ] Connect `fernando-ace/BuildLoop-Learning-Platform` to the Vercel project after Preview/Production databases and environment settings are ready.
 - [ ] Provision dedicated managed PostgreSQL databases for Preview and Production; use TLS, pooled app connections, and a separate migration connection when provider guidance requires it.
-- [ ] Configure Vercel Preview and Production variables: `DATABASE_URL`, `DATABASE_POOL_MAX`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `PUBLIC_APP_URL`, `BUILDLOOP_ENVIRONMENT`, `RESEND_API_KEY`, and `EMAIL_FROM`.
+- [ ] Configure Vercel Preview and Production variables: `DATABASE_URL`, `DATABASE_POOL_MAX`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `PUBLIC_APP_URL`, `BUILDLOOP_ENVIRONMENT`, `RESEND_API_KEY`, `EMAIL_FROM`, `OPENAI_API_KEY`, `SENTRY_DSN`, and `NEXT_PUBLIC_SENTRY_DSN`.
 - [ ] Configure GitHub branch protection to require `BuildLoop CI quality` before merging to `master` (after the workflow is available on the default branch) and configure Vercel production promotion rules.
 - [ ] Choose production origin, add it to hosting, and configure DNS/TLS after domain ownership is confirmed.
 - [ ] Enable managed database automated backups (7-day retention minimum) and PITR if available; follow [the operations runbook](docs/OPERATIONS_RUNBOOK.md).
