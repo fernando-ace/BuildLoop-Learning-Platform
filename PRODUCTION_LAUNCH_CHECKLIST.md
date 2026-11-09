@@ -2,7 +2,7 @@
 
 ## Implemented and verifiable in this repository
 
-- [x] Node.js full-server deployment architecture documented for Next.js 16; Node 22 is pinned in CI and enforced by package engines.
+- [x] Node.js full-server deployment architecture documented for Next.js 16; Node 22 is pinned in CI and enforced by npm's strict package-engine check.
 - [x] CI validates the Drizzle migration journal and runs `git diff --check` across each PR/push diff.
 - [x] PostgreSQL migration command requires an explicit production opt-in and TLS URL.
 - [x] Production migration command rejects localhost.

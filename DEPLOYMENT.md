@@ -2,7 +2,7 @@
 
 ## Runtime architecture
 
-BuildLoop is a Next.js 16 App Router application running on Node.js 22 (`package.json` enforces Node `>=22 <23`). It is not a static site: authentication, application APIs, and generated-app data use server route handlers and PostgreSQL. Vercel is the intended host. PostgreSQL is a separately managed service; use a dedicated production database and a separate preview/test database. Do not reuse another product's database.
+BuildLoop is a Next.js 16 App Router application running on Node.js 22 (`package.json` requires Node `>=22 <23`, and `.npmrc` enables npm's strict engine check). It is not a static site: authentication, application APIs, and generated-app data use server route handlers and PostgreSQL. Vercel is the intended host. PostgreSQL is a separately managed service; use a dedicated production database and a separate preview/test database. Do not reuse another product's database.
 
 Production application data is in PostgreSQL. The legacy SQLite store under `.buildloop-data` is import-only and must not be mounted as production state. Generated apps execute as validated declarative artifacts in BuildLoop's fixed interpreter; they do not execute arbitrary code on the host.
 
