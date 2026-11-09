@@ -6,6 +6,7 @@ import { sameOrigin } from "@/lib/platform/http";
 import { logEvent } from "@/lib/platform/logger";
 import * as Sentry from "@sentry/nextjs";
 import { consumeOperationLimit } from "@/lib/platform/rate-limit";
+import { getBuildLoopEnvironment } from "@/lib/platform/config";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -18,7 +19,7 @@ export async function POST(request: Request) {
   if (!sameOrigin(request)) return Response.json({ error: "The request could not be accepted." }, { status: 403 });
   const identity = await getPlatformIdentity(request);
   if (!identity) return Response.json({ error: "Sign in to build in Studio." }, { status: 401, headers: { "Cache-Control": "no-store" } });
-  if (process.env.BUILDLOOP_BUILDER_MODE !== "deterministic") {
+  if (getBuildLoopEnvironment() === "production" || getBuildLoopEnvironment() === "preview") {
     try {
       const quota = await consumeOperationLimit(`builder:${identity.id}`, 5, 60);
       if (!quota.allowed) return Response.json({ error: "Too many builds just now. Wait a minute and try again." }, { status: 429, headers: { "Retry-After": String(quota.retryAfterSeconds), "Cache-Control": "no-store" } });

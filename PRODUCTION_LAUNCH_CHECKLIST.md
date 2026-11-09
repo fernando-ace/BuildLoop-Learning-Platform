@@ -11,6 +11,7 @@
 - [x] Sentry server/client integration and development-only verification endpoint are implemented with learner-content scrubbing.
 - [x] CI workflow runs against a disposable PostgreSQL 17 service.
 - [x] Builder, Better Auth, app creation, invitation create/resend, and publish/rollback limits share one atomic PostgreSQL-backed fixed-window limiter; managed deployment still requires migration `0004`.
+- [x] Deterministic Builder fixtures are restricted to development/test; Builder limits apply in Preview and Production even if the fixture-mode variable is misconfigured.
 - [x] Better Auth email/password identities and server-side app membership authorization exist.
 - [x] Verification and password-reset requests fail clearly when required email delivery is unavailable; delivery logs omit recipient and token URL.
 - [x] Existing app versions, preview/production runtime, publication, and rollback are PostgreSQL-backed.

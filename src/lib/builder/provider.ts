@@ -7,6 +7,7 @@ import type { GeneratedAppV3 } from "./v3";
 import { clubAttendanceAppV4, equipmentCheckoutAppV4, permissionBoundaryLabV4, volunteerCoordinationV4 } from "./v4-fixtures";
 import { diffV4ApplicationSchemas } from "./schema-diff-v4";
 import type { GeneratedAppV4 } from "./v4";
+import { getBuildLoopEnvironment } from "@/lib/platform/config";
 
 export interface BuilderProvider { readonly name: "openai" | "deterministic"; generate(request: BuilderRequest): Promise<BuilderResult> }
 
@@ -181,4 +182,9 @@ export const openAIBuilder: BuilderProvider = {
   },
 };
 
-export function getBuilder() { return process.env.BUILDLOOP_BUILDER_MODE === "deterministic" ? deterministicBuilder : openAIBuilder; }
+export function getBuilder() {
+  if (process.env.BUILDLOOP_BUILDER_MODE !== "deterministic") return openAIBuilder;
+  const environment = getBuildLoopEnvironment();
+  if (environment !== "development" && environment !== "test") throw new BuilderError("configuration", "The deterministic Builder is only available in development and tests.");
+  return deterministicBuilder;
+}
