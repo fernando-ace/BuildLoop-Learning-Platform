@@ -13,11 +13,11 @@ describe("readiness endpoint", () => {
   });
 
   it("returns ready only when PostgreSQL responds", async () => {
-    query.mockResolvedValueOnce({ rows: [{ "?column?": 1 }] }).mockResolvedValueOnce({ rows: [{ table_name: "drizzle.__drizzle_migrations" }] });
+    query.mockResolvedValueOnce({ rows: [{ "?column?": 1 }] }).mockResolvedValueOnce({ rows: [{ table_name: "drizzle.__drizzle_migrations" }] }).mockResolvedValueOnce({ rows: [{ last_migration: "1794209352358" }] });
     const response = await GET(new Request("http://localhost/api/health/ready", { headers: { "x-request-id": "check-1" } }));
     expect(response.status).toBe(200);
     expect(response.headers.get("x-request-id")).toBe("check-1");
-    expect(await response.json()).toMatchObject({ status: "ready", checks: { database: "ok", migrationJournal: "available", authentication: "not_required", email: "not_required", builder: "not_required", monitoring: "not_required" }, environment: "test" });
+    expect(await response.json()).toMatchObject({ status: "ready", checks: { database: "ok", migrationJournal: "current", authentication: "not_required", email: "not_required", builder: "not_required", monitoring: "not_required" }, environment: "test" });
   });
 
   it("returns a redacted 503 when PostgreSQL is unavailable", async () => {
@@ -37,12 +37,19 @@ describe("readiness endpoint", () => {
     expect(await response.json()).toMatchObject({ status: "not_ready", checks: { database: "ok", migrationJournal: "unavailable" } });
   });
 
+  it("returns not ready when the database migration journal is behind this release", async () => {
+    query.mockResolvedValueOnce({ rows: [{ "?column?": 1 }] }).mockResolvedValueOnce({ rows: [{ table_name: "drizzle.__drizzle_migrations" }] }).mockResolvedValueOnce({ rows: [{ last_migration: "1794208823451" }] });
+    const response = await GET(new Request("http://localhost/api/health/ready"));
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ status: "not_ready", checks: { database: "ok", migrationJournal: "behind" } });
+  });
+
   it("reports missing hosted integrations without exposing configuration values", async () => {
     vi.stubEnv("BUILDLOOP_ENVIRONMENT", "preview");
     vi.stubEnv("BETTER_AUTH_SECRET", "short-secret");
     vi.stubEnv("PUBLIC_APP_URL", "https://preview.example.test");
     vi.stubEnv("OPENAI_API_KEY", "private-openai-key");
-    query.mockResolvedValueOnce({ rows: [{ "?column?": 1 }] }).mockResolvedValueOnce({ rows: [{ table_name: "drizzle.__drizzle_migrations" }] });
+    query.mockResolvedValueOnce({ rows: [{ "?column?": 1 }] }).mockResolvedValueOnce({ rows: [{ table_name: "drizzle.__drizzle_migrations" }] }).mockResolvedValueOnce({ rows: [{ last_migration: "1794209352358" }] });
     const response = await GET(new Request("https://preview.example.test/api/health/ready"));
     const body = await response.text();
     expect(response.status).toBe(503);
@@ -64,9 +71,9 @@ describe("readiness endpoint", () => {
     vi.stubEnv("OPENAI_API_KEY", "test-openai-key");
     vi.stubEnv("SENTRY_DSN", "https://server@example.test/1");
     vi.stubEnv("NEXT_PUBLIC_SENTRY_DSN", "https://client@example.test/2");
-    query.mockResolvedValueOnce({ rows: [{ "?column?": 1 }] }).mockResolvedValueOnce({ rows: [{ table_name: "drizzle.__drizzle_migrations" }] });
+    query.mockResolvedValueOnce({ rows: [{ "?column?": 1 }] }).mockResolvedValueOnce({ rows: [{ table_name: "drizzle.__drizzle_migrations" }] }).mockResolvedValueOnce({ rows: [{ last_migration: "1794209352358" }] });
     const response = await GET(new Request("https://buildloop.example.test/api/health/ready"));
     expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({ status: "ready", checks: { database: "ok", migrationJournal: "available", authentication: "configured", email: "configured", builder: "configured", monitoring: "configured" } });
+    expect(await response.json()).toMatchObject({ status: "ready", checks: { database: "ok", migrationJournal: "current", authentication: "configured", email: "configured", builder: "configured", monitoring: "configured" } });
   });
 });

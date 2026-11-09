@@ -37,7 +37,7 @@ Configure variables independently for local development, Vercel Preview, and Ver
 
 Never use `NEXT_PUBLIC_` for secrets. Vercel's built-in environment values provide deployment metadata; application code reports the environment and release through `/api/health`.
 
-`/api/health/ready` returns 503 in Preview/Production unless PostgreSQL, the migration journal, Better Auth configuration, account email, Builder, and both Sentry DSNs are available. Its hosted integration checks validate configuration presence and origin shape, not provider connectivity or successful delivery; verify email and monitoring with their safe end-to-end checks before launch. Development and test environments do not require those hosted integrations.
+`/api/health/ready` returns 503 in Preview/Production unless PostgreSQL is reachable, the applied migration journal reaches the latest checked-in migration, and Better Auth, account email, Builder, and both Sentry DSNs are configured. Its hosted integration checks validate configuration presence and origin shape, not provider connectivity or successful delivery; verify email and monitoring with their safe end-to-end checks before launch. Development and test environments do not require those hosted integrations.
 
 `BUILDLOOP_SHARED_DB_PATH` belongs to a legacy SQLite repository module with no current production route callers; production app and learner records use PostgreSQL. Do not set it for hosted deployments. The local SQLite import command has its own explicit `--source` argument.
 

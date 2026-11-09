@@ -8,7 +8,7 @@
 - [x] Production migration command rejects localhost.
 - [x] Production migration command requires TLS-enforcing `sslmode=require`, `verify-ca`, or `verify-full`; it rejects plaintext-fallback modes.
 - [x] Production application database startup uses the same TLS and loopback validation before creating a connection pool.
-- [x] Liveness and readiness endpoints expose redacted release metadata; hosted readiness checks PostgreSQL, migrations, and required authentication, email, Builder, and monitoring configuration without returning secret values.
+- [x] Liveness and readiness endpoints expose redacted release metadata; hosted readiness checks PostgreSQL, applied migrations through the checked-in journal head, and required authentication, email, Builder, and monitoring configuration without returning secret values.
 - [x] Sentry server/client integration and development-only verification endpoint are implemented with learner-content scrubbing.
 - [x] The Sentry runtime-injection package is kept external from the Next.js server bundle; the local production server starts without the prior hook-resolution warning.
 - [x] CI workflow runs against a disposable PostgreSQL 17 service.
