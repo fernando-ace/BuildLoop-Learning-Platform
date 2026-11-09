@@ -53,7 +53,7 @@ Never use `NEXT_PUBLIC_` for secrets. Vercel's built-in environment values provi
 5. Promote the tested Vercel deployment. Verify `/api/health/live`, `/api/health/ready`, authentication, database persistence, generated app preview, and a controlled publish/rollback before inviting users.
 6. Record the deployment URL, commit SHA, migration set, smoke-test results, and operator in the release record.
 
-The repository does not currently contain a Vercel project link or deployment credentials. Connect the Vercel project and provide Preview/Production runtime variables before a hosted release can run. Configure `DATABASE_POOL_MAX` against the provider's connection budget; the default ceiling is five connections per warm instance, so total demand scales with instance count.
+Vercel project `buildloop-learning-platform` (`prj_0WDtrIFOTYSHxeYHqfC4RPEIQCPl`) now exists in the connected team with Node 22.x selected. Git connection was intentionally skipped, and the project has no deployment or domain yet. Connect `fernando-ace/BuildLoop-Learning-Platform` after Preview/Production databases and runtime variables are ready. Configure `DATABASE_POOL_MAX` against the provider's connection budget; the default ceiling is five connections per warm instance, so total demand scales with instance count.
 
 ## Migration and rollback rules
 

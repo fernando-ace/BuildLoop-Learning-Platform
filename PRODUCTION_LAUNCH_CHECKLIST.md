@@ -21,7 +21,8 @@
 
 ## Requires operator or provider access
 
-- [ ] Create/connect a dedicated Vercel project for `fernando-ace/BuildLoop-Learning-Platform` and connect Git deployments.
+- [x] Create a dedicated Vercel Next.js project shell and set its Node runtime to 22.x; no Git connection or deployment was started.
+- [ ] Connect `fernando-ace/BuildLoop-Learning-Platform` to the Vercel project after Preview/Production databases and environment settings are ready.
 - [ ] Provision dedicated managed PostgreSQL databases for Preview and Production; use TLS, pooled app connections, and a separate migration connection when provider guidance requires it.
 - [ ] Configure Vercel Preview and Production variables: `DATABASE_URL`, `DATABASE_POOL_MAX`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `PUBLIC_APP_URL`, `BUILDLOOP_ENVIRONMENT`, and (after email implementation) `RESEND_API_KEY`/`EMAIL_FROM`.
 - [ ] Configure GitHub branch protection to require BuildLoop CI before merging to `master` and configure Vercel production promotion rules.
