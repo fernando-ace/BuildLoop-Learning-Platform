@@ -62,3 +62,5 @@ Migrations are an explicit release step, not a build hook and not an application
 Use expand/migrate/contract for schema changes that overlap deployments: first add nullable columns/tables, deploy code compatible with both shapes, backfill in a bounded and resumable job, then remove old columns only in a later release after the old application is no longer deployed. Keep each application release compatible with the prior schema until promotion is confirmed. If the database has advanced and the application deployment fails, redeploy the previous application only when that version is compatible with the new schema; otherwise repair forward. Never restore a production database solely to roll back application code.
 
 Vercel deployment rollback restores application code/traffic. BuildLoop's in-product app-version rollback is a separate operation over a learner's published artifact and data. Neither should be used as a substitute for the other.
+
+See [the operations runbook](docs/OPERATIONS_RUNBOOK.md) for backup configuration expectations, an isolated restore drill, and incident recovery steps. Backup activation and a successful provider restore remain launch gates.

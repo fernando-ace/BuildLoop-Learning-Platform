@@ -19,17 +19,18 @@
 - [ ] Invitation email is delivered and resend behavior is verified.
 - [ ] Apply migration `0004_shared_operation_rate_limits` in Preview and Production and verify Builder/auth throttles across multiple instances.
 - [ ] External error monitoring is configured and a safe test event is verified.
+- [ ] Run and record an isolated database restore drill using [the operations runbook](docs/OPERATIONS_RUNBOOK.md); verify provider retention/PITR settings and operator-approved recovery objectives.
 
 ## Requires operator or provider access
 
 - [x] Create a dedicated Vercel Next.js project shell and set its Node runtime to 22.x; no Git connection or deployment was started.
 - [ ] Connect `fernando-ace/BuildLoop-Learning-Platform` to the Vercel project after Preview/Production databases and environment settings are ready.
 - [ ] Provision dedicated managed PostgreSQL databases for Preview and Production; use TLS, pooled app connections, and a separate migration connection when provider guidance requires it.
-- [ ] Configure Vercel Preview and Production variables: `DATABASE_URL`, `DATABASE_POOL_MAX`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `PUBLIC_APP_URL`, `BUILDLOOP_ENVIRONMENT`, and (after email implementation) `RESEND_API_KEY`/`EMAIL_FROM`.
+- [ ] Configure Vercel Preview and Production variables: `DATABASE_URL`, `DATABASE_POOL_MAX`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `PUBLIC_APP_URL`, `BUILDLOOP_ENVIRONMENT`, `RESEND_API_KEY`, and `EMAIL_FROM`.
 - [ ] Configure GitHub branch protection to require BuildLoop CI before merging to `master` and configure Vercel production promotion rules.
 - [ ] Choose production origin, add it to hosting, and configure DNS/TLS after domain ownership is confirmed.
-- [ ] Enable managed database automated backups (7-day retention minimum) and PITR if available; perform and record an isolated restore drill.
-- [ ] Verify sender domain and email delivery with the chosen provider after the email boundary is implemented.
+- [ ] Enable managed database automated backups (7-day retention minimum) and PITR if available; follow [the operations runbook](docs/OPERATIONS_RUNBOOK.md).
+- [ ] Verify the sender domain and invitation, verification, and password-reset email delivery with the chosen provider.
 - [ ] Create/configure a Sentry project, set `SENTRY_DSN` and `NEXT_PUBLIC_SENTRY_DSN`, configure Vercel log retention/alerts, and verify a safe test event.
 - [ ] Run preview and production smoke tests with real accounts, persistence, invitations, app publishing, and rollback; record deployment SHA and URL.
 
