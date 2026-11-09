@@ -9,6 +9,7 @@ import { campusEventOperationsV4 } from "@/lib/builder/v4-platform-fixtures";
 import { getPlatformPool, closePlatformDatabase } from "./database";
 import { PlatformError, PlatformRepository } from "./repository";
 import { importLegacySQLiteFile } from "./sqlite-import";
+import { consumeOperationLimit } from "./rate-limit";
 import type { PlatformIdentity } from "./session";
 
 const enabled = Boolean(process.env.DATABASE_URL);
@@ -49,6 +50,18 @@ afterEach(async () => {
 afterAll(async () => { if (enabled) await closePlatformDatabase(); });
 
 describe.skipIf(!enabled)("PostgreSQL platform repository", () => {
+  it("enforces a shared rate limit atomically under concurrent requests", async () => {
+    const key = `integration:${randomUUID()}`;
+    try {
+      const results = await Promise.all(Array.from({ length: 12 }, () => consumeOperationLimit(key, 5, 60)));
+      expect(results.filter((result) => result.allowed)).toHaveLength(5);
+      expect(results.filter((result) => !result.allowed)).toHaveLength(7);
+    } finally {
+      const { createHash } = await import("node:crypto");
+      await pool().query("DELETE FROM operation_rate_limits WHERE key=$1", [createHash("sha256").update(key).digest("hex")]);
+    }
+  });
+
   it("keeps app reads and writes tenant-scoped and enforces environment foreign keys", async () => {
     const ownerA = await newUser("Owner A"), ownerB = await newUser("Owner B");
     const appA = await newApp(ownerA, "Events A"), appB = await newApp(ownerB, "Events B");
