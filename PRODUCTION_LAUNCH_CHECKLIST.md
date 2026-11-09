@@ -10,6 +10,7 @@
 - [x] Production application database startup uses the same TLS and loopback validation before creating a connection pool.
 - [x] Liveness and PostgreSQL readiness endpoints expose redacted release metadata.
 - [x] Sentry server/client integration and development-only verification endpoint are implemented with learner-content scrubbing.
+- [x] The Sentry runtime-injection package is kept external from the Next.js server bundle; the local production server starts without the prior hook-resolution warning.
 - [x] CI workflow runs against a disposable PostgreSQL 17 service.
 - [x] Builder, Better Auth, app creation, invitation create/resend, and publish/rollback limits share one atomic PostgreSQL-backed fixed-window limiter; managed deployment still requires migration `0004`.
 - [x] Deterministic Builder fixtures are restricted to development/test; Builder limits apply in Preview and Production even if the fixture-mode variable is misconfigured.
