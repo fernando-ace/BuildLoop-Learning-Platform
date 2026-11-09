@@ -1,7 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { issueTestSession, testCookieName } from "@/lib/platform/session";
 import { GET as loadApp, POST as mutate } from "./route";
 
 const context = { params: Promise.resolve({ appId: "app_12345678-1234-1234-1234-123456789abc" }) };
+
+afterEach(() => vi.unstubAllEnvs());
 
 describe("published app HTTP boundary", () => {
   it("does not treat the old demo persona cookie or request roles as platform identity", async () => {
@@ -18,5 +21,18 @@ describe("published app HTTP boundary", () => {
   it("rejects cross-site mutations before reading the body or database", async () => {
     const response = await mutate(new Request("http://localhost/api/apps/app/mutations", { method: "POST", headers: { host: "localhost", "content-type": "application/json" }, body: "{}" }), context);
     expect(response.status).toBe(403);
+  });
+
+  it("rejects oversized authenticated mutation bodies before database access", async () => {
+    vi.stubEnv("BUILDLOOP_AUTH_MODE", "test");
+    vi.stubEnv("BUILDLOOP_TEST_AUTH_SECRET", "shared-api-test-secret-with-at-least-32-characters");
+    const session = issueTestSession("test-owner");
+    const response = await mutate(new Request("http://localhost/api/apps/app/mutations", {
+      method: "POST",
+      headers: { origin: "http://localhost", host: "localhost", cookie: `${testCookieName()}=${session}`, "content-type": "application/json" },
+      body: JSON.stringify({ versionId: "v1", operation: { type: "update", collection: "records", recordId: "record-1", values: { notes: "x".repeat(65_000) } } }),
+    }), context);
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ code: "invalid" });
   });
 });

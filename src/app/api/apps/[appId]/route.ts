@@ -1,5 +1,5 @@
 import { getPlatformRepository, PlatformError } from "@/lib/platform/repository";
-import { requireIdentity, responseForPlatformError } from "@/lib/platform/http";
+import { isRecord, readJson, requireIdentity, responseForPlatformError } from "@/lib/platform/http";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,7 +20,9 @@ export async function POST(request: Request, context: Context) {
   try {
     const user = await requireIdentity(request);
     const { appId } = await context.params;
-    const body = await request.json() as { operation?: unknown; versionId?: unknown; environment?: unknown };
+    const parsed = await readJson(request, 64_000);
+    if (!isRecord(parsed)) return Response.json({ error: "The change request is incomplete." }, { status: 400 });
+    const body = parsed as { operation?: unknown; versionId?: unknown; environment?: unknown };
     if (typeof body.versionId !== "string" || !body.operation || typeof body.operation !== "object" || typeof body.environment !== "undefined" && body.environment !== "preview" && body.environment !== "production") return Response.json({ error: "The change request is incomplete." }, { status: 400 });
     const result = await getPlatformRepository().mutateRuntime(user, appId, body.operation as never, body.versionId, body.environment === "preview" ? "preview" : "production");
     return Response.json({ ok: true, ...result }, { headers: { "Cache-Control": "no-store" } });
