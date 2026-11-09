@@ -25,6 +25,8 @@ Mission state is stored in `learner_progress`, keyed only by the authenticated u
 
 Both APIs use compare-and-swap revisions. A stale browser cannot replace a newer account record silently. When an older browser save is first uploaded, the browser copy stays in local storage; a collision asks the learner which copy to keep and keeps a backup of the other copy locally. Studio app identity, version summaries, and artifacts are read through app-membership-checked PostgreSQL queries; version artifacts load on demand. The SQLite app importer does not migrate learner records.
 
+When a browser changes from one linked account to another, the Studio browser cache is saved under the previous learner's local account key and the new learner's account cache is restored before cloud state is merged. This prevents an unrelated learner's device-local Studio projects from appearing in the new account's library. Legacy browser saves without an account link remain subject to the explicit import/conflict flow where a matching server record exists.
+
 ## Tenant model
 
 Each app has a platform owner, optional administrators, and members. Platform roles control project, membership, and publication operations. The separate `app_role` controls permissions defined by the selected V4 app artifact. Changing one role does not grant the other set of permissions. Every data query includes an app ID and environment, and composite foreign keys keep runtime rows attached to that tenant's preview or production environment.

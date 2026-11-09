@@ -1,7 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createProject, recordBuild } from "./studio";
 import { v2Fixtures } from "./builder/v2";
-import { buildStudioProjectsFromCloud, createStudioProject, getStudioLearnerSnapshot, migrateStudioProject, migrateStudioState, openStudioProject, updateStudioProject, getStudioState } from "./studio-store";
+import { buildStudioProjectsFromCloud, captureStudioLocalCopy, createStudioProject, getStudioLearnerSnapshot, migrateStudioProject, migrateStudioState, openStudioProject, restoreStudioLocalCopy, updateStudioProject, getStudioState, replaceStudioProjectsFromCloud } from "./studio-store";
 
 describe("Studio v1 save compatibility", () => {
   it("keeps a saved V1 artifact immutable in history after a V2 build", () => {
@@ -53,5 +53,30 @@ describe("Studio v1 save compatibility", () => {
     updateStudioProject(project.id, (current) => ({ ...current, build: { status: "building", attempts: 1 } }));
     openStudioProject(project.id);
     expect(getStudioState().projects.find((item) => item.id === project.id)?.build).toMatchObject({ status: "failed", message: expect.stringContaining("stopped") });
+  });
+
+  it("keeps local Studio copies separated when the browser switches accounts", () => {
+    const values = new Map<string, string>();
+    vi.stubGlobal("window", { localStorage: {
+      getItem: (name: string) => values.get(name) ?? null,
+      setItem: (name: string, value: string) => { values.set(name, value); },
+      removeItem: (name: string) => { values.delete(name); },
+    } });
+    try {
+      replaceStudioProjectsFromCloud([], [], false);
+      createStudioProject(createProject({ name: "Account A private draft", user: "Learner A", problem: "A private problem", why: "A private reason" }, "local-a"));
+      values.set("buildloop-studio-v1:cloud-link", JSON.stringify({ userId: "account-a", signatures: {} }));
+      expect(captureStudioLocalCopy("account-a")).toBe(true);
+
+      expect(restoreStudioLocalCopy("account-b")).toBe(true);
+      expect(getStudioState().projects).toEqual([]);
+      expect(values.has("buildloop-studio-v1:cloud-link")).toBe(false);
+      createStudioProject(createProject({ name: "Account B private draft", user: "Learner B", problem: "Another private problem", why: "Another reason" }, "local-b"));
+      expect(captureStudioLocalCopy("account-b")).toBe(true);
+
+      expect(restoreStudioLocalCopy("account-a")).toBe(true);
+      expect(getStudioState().projects.map((project) => project.name)).toEqual(["Account A private draft"]);
+      expect(JSON.parse(values.get("buildloop-studio-v1:cloud-link") ?? "{}").userId).toBe("account-a");
+    } finally { vi.unstubAllGlobals(); }
   });
 });

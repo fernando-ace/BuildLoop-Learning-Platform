@@ -1,11 +1,11 @@
 "use client";
 
-import { buildStudioProjectsFromCloud, configureStudioCloudSync, getStudioLearnerSnapshot, getStudioState, replaceStudioProjectsFromCloud } from "./studio-store";
+import { buildStudioProjectsFromCloud, captureStudioLocalCopy, configureStudioCloudSync, getStudioLearnerSnapshot, getStudioState, replaceStudioProjectsFromCloud, restoreStudioLocalCopy } from "./studio-store";
 import type { StudioProject } from "./studio";
 
 type StudioRecord = Record<string, unknown> & { appId: string; revision: number };
 type StudioLibrary = { learnerId: string; applications: unknown[]; learningRecords: StudioRecord[] };
-type SyncState = "loading" | "local" | "syncing" | "synced" | "conflict" | "unavailable";
+type SyncState = "loading" | "local" | "syncing" | "synced" | "conflict" | "unavailable" | "switching";
 
 const listeners = new Set<() => void>();
 let state: SyncState = "loading";
@@ -17,6 +17,7 @@ let timer: ReturnType<typeof setTimeout> | null = null;
 let running = false;
 let pendingProjects: StudioProject[] = [];
 const pendingArchives = new Set<string>();
+let pendingArchiveUserId: string | null = null;
 let initialized = false;
 
 function setState(next: SyncState) { state = next; listeners.forEach((listener) => listener()); }
@@ -50,13 +51,18 @@ function getLink() {
   catch { return null; }
 }
 
+function archiveQueueKey(userId: string) { return `buildloop-studio-v1:pending-archives:${encodeURIComponent(userId)}`; }
+
 function savePendingArchives() {
-  try { window.localStorage.setItem("buildloop-studio-v1:pending-archives", JSON.stringify([...pendingArchives])); } catch { /* The local removal remains in effect; the caller can retry account sync. */ }
+  if (!pendingArchiveUserId) return;
+  try { window.localStorage.setItem(archiveQueueKey(pendingArchiveUserId), JSON.stringify([...pendingArchives])); } catch { /* The local removal remains in effect; the caller can retry account sync. */ }
 }
 
-function loadPendingArchives() {
+function loadPendingArchives(userId: string) {
+  pendingArchives.clear();
+  pendingArchiveUserId = userId;
   try {
-    const values = JSON.parse(window.localStorage.getItem("buildloop-studio-v1:pending-archives") ?? "[]") as unknown;
+    const values = JSON.parse(window.localStorage.getItem(archiveQueueKey(userId)) ?? "[]") as unknown;
     if (Array.isArray(values)) for (const id of values) if (typeof id === "string" && id.startsWith("app_") && id.length <= 80) pendingArchives.add(id);
   } catch { /* Ignore a malformed retry queue; the app remains available through the account library. */ }
 }
@@ -135,9 +141,17 @@ export async function initializeStudioCloudSync() {
   if (initialized) return;
   initialized = true;
   try {
-    loadPendingArchives();
     const library = await requestLibrary();
     if (!library) { setState("local"); return; }
+    const previousLink = getLink();
+    if (typeof previousLink?.userId === "string" && previousLink.userId !== library.learnerId) {
+      if (!captureStudioLocalCopy(previousLink.userId) && !preserveLocal()) { setState("switching"); return; }
+      if (!restoreStudioLocalCopy(library.learnerId)) {
+        setState("switching");
+        return;
+      }
+    }
+    loadPendingArchives(library.learnerId);
     accountId = library.learnerId;
     apps = new Set(library.applications.flatMap((application) => application && typeof application === "object" && typeof (application as Record<string, unknown>).id === "string" ? [(application as Record<string, unknown>).id as string] : []));
     revisions = new Map(library.learningRecords.map((record) => [record.appId, record.revision]));
@@ -177,6 +191,7 @@ export async function selectStudioAccountCopy() {
   try {
     if (!preserveLocal()) { setState("unavailable"); return; }
     installLibrary(pendingLibrary);
+    loadPendingArchives(pendingLibrary.learnerId);
     configureStudioCloudSync(queueStudioProjects, archiveStudioProject);
     setState("synced");
   } catch { setState("unavailable"); }

@@ -1,6 +1,7 @@
 import { initialStudioState, type StudioMigrationProvenance, type StudioProject, type StudioState, type StudioStage } from "./studio";
 
 const key = "buildloop-studio-v1";
+const cloudLinkKey = `${key}:cloud-link`;
 const listeners = new Set<() => void>();
 let state: StudioState = initialStudioState;
 let loaded = false;
@@ -105,13 +106,13 @@ export function buildStudioProjectsFromCloud(applications: unknown, learningReco
   });
 }
 
-export function replaceStudioProjectsFromCloud(projects: StudioProject[], archivedIds: string[] = []) {
+export function replaceStudioProjectsFromCloud(projects: StudioProject[], archivedIds: string[] = [], preserveUnlinkedLocal = true) {
   applyingCloud = true;
   try {
     const local = getStudioState();
     const cloudIds = new Set(projects.map((project) => project.id));
     const excluded = new Set(archivedIds);
-    const retainedLocal = local.projects.filter((project) => !cloudIds.has(project.id) && !excluded.has(project.id));
+    const retainedLocal = preserveUnlinkedLocal ? local.projects.filter((project) => !cloudIds.has(project.id) && !excluded.has(project.id)) : [];
     const hydratedProjects = projects.map((project) => {
       const previous = local.projects.find((item) => item.id === project.id);
       if (!previous) return project;
@@ -129,6 +130,39 @@ export function replaceStudioProjectsFromCloud(projects: StudioProject[], archiv
     }
     listeners.forEach((listener) => listener());
   } finally { applyingCloud = false; }
+}
+
+export function captureStudioLocalCopy(userId: string): boolean {
+  if (typeof window === "undefined" || !userId) return false;
+  try {
+    const current = window.localStorage.getItem(key) ?? JSON.stringify(getStudioState());
+    const link = window.localStorage.getItem(cloudLinkKey);
+    window.localStorage.setItem(`${key}:account-copy:${encodeURIComponent(userId)}`, JSON.stringify({ current, link }));
+    return true;
+  } catch { return false; }
+}
+
+/** Switch the browser's visible Studio cache to one learner without merging another learner's local projects. */
+export function restoreStudioLocalCopy(userId: string): boolean {
+  if (typeof window === "undefined" || !userId) return false;
+  try {
+    const stored = window.localStorage.getItem(`${key}:account-copy:${encodeURIComponent(userId)}`);
+    let next = initialStudioState;
+    let link: string | null = null;
+    if (stored) {
+      const copy = JSON.parse(stored) as { current?: unknown; link?: unknown };
+      if (typeof copy.current === "string") next = migrateStudioState(JSON.parse(copy.current));
+      if (typeof copy.link === "string") link = copy.link;
+    }
+    state = next;
+    loaded = true;
+    window.localStorage.removeItem(key);
+    window.localStorage.removeItem(cloudLinkKey);
+    window.localStorage.setItem(key, JSON.stringify(state));
+    if (link) window.localStorage.setItem(cloudLinkKey, link);
+    listeners.forEach((listener) => listener());
+    return true;
+  } catch { return false; }
 }
 function save(next: StudioState, syncProjectId?: string) {
   state = next;

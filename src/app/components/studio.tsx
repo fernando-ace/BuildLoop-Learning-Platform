@@ -266,6 +266,8 @@ export function Studio({ onBack, courseComplete }: { onBack: () => void; courseC
   };
   const back = <button className="text-button" onClick={onBack} type="button">← Back to Missions</button>;
   const frame = (content: ReactNode) => <div className="studio-shell"><header className="studio-topbar"><div className="brand">build<span>loop</span></div><span className="hub-local">{cloudState === "synced" ? "Studio · Synced to your account" : "Studio · Saved on this device"}</span>{back}</header><StudioCloudNotice state={cloudState} />{content}</div>;
+  if (cloudState === "loading") return frame(<main className="studio-main" aria-live="polite"><p role="status">Checking your Studio account…</p></main>);
+  if (cloudState === "switching") return frame(<main className="studio-main" aria-live="polite"><p role="status">Your previous Studio copy is being kept private while this browser switches accounts. Free browser storage if needed, then retry.</p><button className="button button-quiet" onClick={retryStudioCloudSync} type="button">Retry account switch</button></main>);
   if (state.screen === "hub") return frame(<main className="studio-main"><section className="studio-intro"><span className="eyebrow">BUILDLOOP STUDIO</span><h1>Use the workflow on something you care about.</h1><p>Start with a person and a problem. Build a small first version, try it, learn, and improve it.</p>{!courseComplete && <p className="studio-recommend">You can begin now. Completing the six Missions first is recommended.</p>}</section>
     <section className="studio-transition"><span className="eyebrow">LEARN THE WORKFLOW <span aria-hidden="true">→</span> USE THE WORKFLOW</span><p>{courseComplete ? "You practiced the workflow. Now use it on something you care about." : "A project you care about is a good place to practice."}</p></section><ProjectList projects={state.projects} /></main>);
 
@@ -357,7 +359,7 @@ export function Studio({ onBack, courseComplete }: { onBack: () => void; courseC
 }
 
 function StudioCloudNotice({ state }: { state: string }) {
-  if (["loading", "synced", "local"].includes(state)) return null;
+  if (["loading", "switching", "synced", "local"].includes(state)) return null;
   const conflict = state === "conflict";
   const text = conflict
     ? "This browser and your account have different Studio notes. Choose which copy to keep; the other copy is preserved on this device."
