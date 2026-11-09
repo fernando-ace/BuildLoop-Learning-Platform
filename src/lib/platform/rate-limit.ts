@@ -21,3 +21,14 @@ export async function consumeOperationLimit(key: string, limit: number, windowSe
   const resetAt = new Date(row.reset_at).getTime();
   return { allowed: Number(row.request_count) <= limit, retryAfterSeconds: Math.max(1, Math.ceil((resetAt - Date.now()) / 1000)) };
 }
+
+export async function operationLimitResponse(key: string, limit: number, windowSeconds: number, message: string): Promise<Response | null> {
+  if (process.env.NODE_ENV !== "production" && process.env.BUILDLOOP_AUTH_MODE === "test") return null;
+  try {
+    const result = await consumeOperationLimit(key, limit, windowSeconds);
+    if (result.allowed) return null;
+    return Response.json({ error: message }, { status: 429, headers: { "Retry-After": String(result.retryAfterSeconds), "Cache-Control": "no-store" } });
+  } catch {
+    return Response.json({ error: "This service is temporarily unavailable. Try again shortly." }, { status: 503, headers: { "Cache-Control": "no-store" } });
+  }
+}

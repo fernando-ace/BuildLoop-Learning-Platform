@@ -1,5 +1,6 @@
 import { getPlatformRepository, PlatformError } from "@/lib/platform/repository";
 import { isRecord, readJson, requireIdentity, responseForPlatformError, sameOrigin } from "@/lib/platform/http";
+import { operationLimitResponse } from "@/lib/platform/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,6 +28,10 @@ export async function POST(request: Request, context: Context) {
     const body = await readJson(request, 8_000);
     if (!isRecord(body) || !["analyze", "publish", "analyzeRollback", "rollback"].includes(String(body.action)) || typeof body.versionId !== "string" || body.versionId.length > 80 || body.expectedPublishedVersion !== undefined && body.expectedPublishedVersion !== null && typeof body.expectedPublishedVersion !== "string") return Response.json({ error: "Choose a saved app version." }, { status: 400 });
     const { appId } = await context.params;
+    if (body.action === "publish" || body.action === "rollback") {
+      const limited = await operationLimitResponse(`publish:${user.id}`, 10, 600, "Too many publishing changes were requested recently. Try again later.");
+      if (limited) return limited;
+    }
     const repository = getPlatformRepository();
     const expectedVersionId = body.expectedPublishedVersion as string | null | undefined;
     if (body.action === "analyze" || body.action === "analyzeRollback") {

@@ -16,7 +16,7 @@ Database, Better Auth, Builder, and email credentials are server-only. Never use
 
 ## Known hardening work before public launch
 
-- Builder spend limits and Better Auth authentication throttles use an atomic PostgreSQL-backed fixed-window counter, shared across instances. Apply migration `0004_shared_operation_rate_limits` before enabling the Builder in a hosted environment. Invitation and publication endpoints still need dedicated abuse limits if their exposure or usage grows.
+- Builder spend limits, Better Auth authentication throttles, app creation, invitation create/resend, and publish/rollback operations use atomic PostgreSQL-backed fixed-window counters shared across instances. Apply migration `0004_shared_operation_rate_limits` before enabling these operations in a hosted environment. Limits are per learner; user-supplied application identifiers do not create separate buckets.
 - Configure a verified sender and verify email-confirmation and password-reset links before allowing untrusted public signups.
 - Configure Sentry and verify a test event; extend structured audit events to cover authentication denials, invitation mail/acceptance failures, publishing, rollback, and provider failures.
 - Complete production-origin, CSRF, content-security-policy, and generated-app iframe review against the deployed configuration.

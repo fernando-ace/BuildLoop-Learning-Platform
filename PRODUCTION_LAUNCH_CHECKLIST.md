@@ -8,7 +8,7 @@
 - [x] Liveness and PostgreSQL readiness endpoints expose redacted release metadata.
 - [x] Sentry server/client integration and development-only verification endpoint are implemented with learner-content scrubbing.
 - [x] CI workflow runs against a disposable PostgreSQL 17 service.
-- [x] Builder spend throttling and Better Auth brute-force limits use one atomic PostgreSQL-backed fixed-window limiter; managed deployment still requires migration `0004`.
+- [x] Builder, Better Auth, app creation, invitation create/resend, and publish/rollback limits share one atomic PostgreSQL-backed fixed-window limiter; managed deployment still requires migration `0004`.
 - [x] Better Auth email/password identities and server-side app membership authorization exist.
 - [x] Existing app versions, preview/production runtime, publication, and rollback are PostgreSQL-backed.
 - [x] Generated app execution remains declarative and constrained.
