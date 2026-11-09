@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { validateMigrationTarget } from "./migration-safety";
+import { validateMigrationTarget, validateProductionDatabaseUrl } from "./migration-safety";
 
 const remoteProduction = {
   databaseUrl: "postgresql://operator:secret@db.example.test:5432/buildloop?sslmode=require",
@@ -27,6 +27,13 @@ describe("migration target safety", () => {
   it.each(["require", "verify-ca", "verify-full"])("accepts TLS-enforcing sslmode=%s", (sslmode) => {
     const databaseUrl = `postgresql://db.example.test/buildloop?sslmode=${sslmode}`;
     expect(validateMigrationTarget({ ...remoteProduction, databaseUrl }).hostname).toBe("db.example.test");
+    expect(validateProductionDatabaseUrl(databaseUrl).hostname).toBe("db.example.test");
+  });
+
+  it("applies production TLS and loopback checks to application database URLs", () => {
+    expect(() => validateProductionDatabaseUrl("postgresql://db.example.test/buildloop")).toThrow("must explicitly require TLS");
+    expect(() => validateProductionDatabaseUrl("postgresql://127.0.0.1/buildloop?sslmode=require")).toThrow("cannot point to a local database");
+    expect(() => validateProductionDatabaseUrl("postgresql://[::1]/buildloop?sslmode=require")).toThrow("cannot point to a local database");
   });
 
   it("requires production opt-in and rejects local production databases", () => {

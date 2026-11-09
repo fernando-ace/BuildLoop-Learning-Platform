@@ -8,7 +8,7 @@ Updated 2026-11-09 from the isolated `goal-14-production-readiness` worktree. Th
 | --- | --- | --- |
 | `npm run typecheck` | Passed | TypeScript check. |
 | `npm run lint` | Passed | ESLint. |
-| `npm test` | 229 passed, 9 skipped (238 total) | 39 test files passed; 2 skipped. PostgreSQL integration tests skip without `DATABASE_URL`; see below. |
+| `npm test` | 230 passed, 9 skipped (239 total) | 39 test files passed; 2 skipped. PostgreSQL integration tests skip without `DATABASE_URL`; see below. |
 | `npm run build` | Passed | Next.js 16.4.5 production build. |
 | `npm audit --audit-level=moderate` | 0 vulnerabilities | Dependency audit run 2026-11-09. |
 | `npx drizzle-kit check` | Passed | Migration journal and snapshots are internally consistent. This does not apply migrations to a database. |
@@ -16,7 +16,7 @@ Updated 2026-11-09 from the isolated `goal-14-production-readiness` worktree. Th
 
 The focused `src/lib/platform/email.test.ts` suite passed (4 tests) after hardening required verification/password-reset email delivery. Required account-action mail now surfaces a generic retryable error if Resend is unconfigured or rejects delivery; logs contain no recipient or action URL.
 
-The focused migration-target suite passed (12 tests). It covers remote and production opt-ins, production/local rejection including IPv6 loopback, Vercel environment mismatch, PostgreSQL URL validation, and TLS enforcement. Production accepts only `sslmode=require`, `verify-ca`, or `verify-full`; `prefer` and `allow` are rejected because they can fall back to plaintext. Typecheck and lint passed after this change.
+The focused migration-target suite passed (13 tests). It covers remote and production opt-ins, production/local rejection including IPv4 and IPv6 loopback, Vercel environment mismatch, PostgreSQL URL validation, and TLS enforcement for both migrations and runtime connections. Production accepts only `sslmode=require`, `verify-ca`, or `verify-full`; `prefer` and `allow` are rejected because they can fall back to plaintext. Typecheck, lint, the full unit suite, and production build passed after this change.
 
 ## Browser and database checks
 

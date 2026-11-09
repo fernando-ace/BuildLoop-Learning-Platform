@@ -6,6 +6,7 @@
 - [x] PostgreSQL migration command requires an explicit production opt-in and TLS URL.
 - [x] Production migration command rejects localhost.
 - [x] Production migration command requires TLS-enforcing `sslmode=require`, `verify-ca`, or `verify-full`; it rejects plaintext-fallback modes.
+- [x] Production application database startup uses the same TLS and loopback validation before creating a connection pool.
 - [x] Liveness and PostgreSQL readiness endpoints expose redacted release metadata.
 - [x] Sentry server/client integration and development-only verification endpoint are implemented with learner-content scrubbing.
 - [x] CI workflow runs against a disposable PostgreSQL 17 service.

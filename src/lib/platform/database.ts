@@ -4,6 +4,7 @@ import { Pool } from "pg";
 import * as schema from "./schema";
 import { getBuildLoopEnvironment } from "./config";
 import { logEvent } from "./logger";
+import { validateProductionDatabaseUrl } from "./migration-safety";
 
 let pool: Pool | undefined;
 let database: NodePgDatabase<typeof schema> | undefined;
@@ -15,7 +16,7 @@ export function getPlatformDatabase() {
     const max = Number(process.env.DATABASE_POOL_MAX ?? 5);
     if (!Number.isInteger(max) || max < 1 || max > 20) throw new Error("DATABASE_POOL_MAX must be an integer between 1 and 20.");
     const environment = getBuildLoopEnvironment();
-    if (environment === "production" && new URL(connectionString).hostname === "localhost") throw new Error("Production DATABASE_URL cannot point to localhost.");
+    if (environment === "production") validateProductionDatabaseUrl(connectionString);
     pool = new Pool({ connectionString, max, idleTimeoutMillis: 10_000, connectionTimeoutMillis: 5_000, statement_timeout: 5_000, application_name: "buildloop-platform" });
     pool.on("error", () => logEvent("error", "database.pool_error"));
     database = drizzle(pool, { schema });
