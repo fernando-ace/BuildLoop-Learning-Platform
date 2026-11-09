@@ -9,6 +9,7 @@ import { initialMission5Progress, initialMission5State, mission5Reducer, recordM
 import { initialMission6Progress, initialMission6State, mission6Reducer, recordMission6Attempt, type Mission6Action, type Mission6Progress, type Mission6State } from "./missions/build-it-for-real";
 
 const storageKey = "buildloop-learner-v2";
+const cloudLinkKey = `${storageKey}:cloud-link`;
 const listeners = new Set<() => void>();
 let cloudSync: ((snapshot: Record<string, unknown>) => void) | null = null;
 let currentState = initialState;
@@ -124,6 +125,36 @@ export function readLocalLearnerSave() {
   try {
     return window.localStorage.getItem(storageKey) ?? window.localStorage.getItem("buildloop-mission-v1");
   } catch { return null; }
+}
+
+export function captureLocalLearnerCopy(userId: string) {
+  if (typeof window === "undefined" || !userId) return false;
+  try {
+    const snapshot = getCloudLearnerSnapshot();
+    const link = window.localStorage.getItem(cloudLinkKey);
+    window.localStorage.setItem(`${storageKey}:account-copy:${encodeURIComponent(userId)}`, JSON.stringify({ snapshot, link }));
+    return true;
+  } catch { return false; }
+}
+
+/** Replace this browser's visible Mission cache with a learner-specific local copy. */
+export function restoreLocalLearnerCopy(userId: string) {
+  if (typeof window === "undefined" || !userId) return false;
+  try {
+    const stored = window.localStorage.getItem(`${storageKey}:account-copy:${encodeURIComponent(userId)}`);
+    let snapshot = getInitialCloudLearnerSnapshot();
+    let link: string | null = null;
+    if (stored) {
+      const copy = JSON.parse(stored) as { snapshot?: unknown; link?: unknown };
+      if (copy.snapshot && typeof copy.snapshot === "object" && !Array.isArray(copy.snapshot)) snapshot = copy.snapshot as Record<string, unknown>;
+      if (typeof copy.link === "string") link = copy.link;
+    }
+    configureLearnerCloudSync(null);
+    if (!applyCloudLearnerSnapshot(snapshot)) return false;
+    window.localStorage.removeItem(cloudLinkKey);
+    if (link) window.localStorage.setItem(cloudLinkKey, link);
+    return true;
+  } catch { return false; }
 }
 
 export function applyCloudLearnerSnapshot(value: Record<string, unknown>) {

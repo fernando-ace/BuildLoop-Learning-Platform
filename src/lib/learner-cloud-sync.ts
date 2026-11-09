@@ -1,9 +1,9 @@
 "use client";
 
-import { applyCloudLearnerSnapshot, configureLearnerCloudSync, getCloudLearnerSnapshot, getInitialCloudLearnerSnapshot, readLocalLearnerSave } from "./store";
+import { applyCloudLearnerSnapshot, captureLocalLearnerCopy, configureLearnerCloudSync, getCloudLearnerSnapshot, getInitialCloudLearnerSnapshot, readLocalLearnerSave, restoreLocalLearnerCopy } from "./store";
 
 type CloudRecord = Record<string, unknown> & { revision: number; updatedAt: string };
-type SyncState = "loading" | "local" | "syncing" | "synced" | "conflict" | "unavailable";
+type SyncState = "loading" | "local" | "syncing" | "synced" | "conflict" | "unavailable" | "switching";
 type CloudResponse = { learnerId: string; progress: CloudRecord | null };
 
 const listeners = new Set<() => void>();
@@ -115,6 +115,15 @@ export async function initializeLearnerCloudSync() {
   try {
     const server = await requestCurrent();
     if (!server) { setState("local"); return; }
+    const previousUserId = linkedUserId();
+    if (previousUserId && previousUserId !== server.learnerId) {
+      setState("switching");
+      pending = null;
+      if (timer) clearTimeout(timer);
+      timer = null;
+      if (!captureLocalLearnerCopy(previousUserId) && !preserveLocal()) return;
+      if (!restoreLocalLearnerCopy(server.learnerId)) return;
+    }
     accountId = server.learnerId;
     if (!server.progress) {
       if (readLocalLearnerSave() && linkedUserId() && linkedUserId() !== server.learnerId) {
@@ -153,7 +162,7 @@ export async function initializeLearnerCloudSync() {
     configureLearnerCloudSync(queue);
     setState("synced");
   } catch {
-    setState("unavailable");
+    setState(linkedUserId() ? "switching" : "unavailable");
   }
 }
 

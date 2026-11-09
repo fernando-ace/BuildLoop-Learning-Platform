@@ -27,6 +27,8 @@ Both APIs use compare-and-swap revisions. A stale browser cannot replace a newer
 
 When a browser changes from one linked account to another, the Studio browser cache is saved under the previous learner's local account key and the new learner's account cache is restored before cloud state is merged. This prevents an unrelated learner's device-local Studio projects from appearing in the new account's library. Legacy browser saves without an account link remain subject to the explicit import/conflict flow where a matching server record exists.
 
+Mission progress follows the same linked-account cache isolation. While the account is being checked or local copies are separated, the Mission UI hides progress until the identity check succeeds. When the previous learner's copy is successfully retained, it remains available if that learner returns on the same browser.
+
 ## Tenant model
 
 Each app has a platform owner, optional administrators, and members. Platform roles control project, membership, and publication operations. The separate `app_role` controls permissions defined by the selected V4 app artifact. Changing one role does not grant the other set of permissions. Every data query includes an app ID and environment, and composite foreign keys keep runtime rows attached to that tenant's preview or production environment.

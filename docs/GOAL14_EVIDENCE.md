@@ -8,7 +8,7 @@ Updated 2026-11-09 from the isolated `goal-14-production-readiness` worktree. Th
 | --- | --- | --- |
 | `npm run typecheck` | Passed | TypeScript check. |
 | `npm run lint` | Passed | ESLint. |
-| `npm test` | 215 passed, 9 skipped (224 total) | PostgreSQL integration tests skip without `DATABASE_URL`; see below. |
+| `npm test` | 216 passed, 9 skipped (225 total) | PostgreSQL integration tests skip without `DATABASE_URL`; see below. |
 | `npm run build` | Passed | Next.js 16.4.5 production build. |
 | `npm audit --audit-level=moderate` | 0 vulnerabilities | Dependency audit at the time of this run. |
 | `npx drizzle-kit check` | Passed | Migration journal and snapshots are internally consistent. This does not apply migrations to a database. |
@@ -18,11 +18,15 @@ Updated 2026-11-09 from the isolated `goal-14-production-readiness` worktree. Th
 
 `npm run test:e2e` ran 33 Chromium cases: 20 passed and 13 Studio cases failed during shared setup. The test-auth endpoint could not create its test user because this worktree has no `DATABASE_URL`. The 13 failures report `Test authentication is not configured.` and happen before the Studio flows run; they are environment-blocked, not passing Studio evidence.
 
+After adding learner cache isolation, the targeted first-Mission Chromium flow was rerun separately and passed (1 test).
+
 The host reports a running PostgreSQL 17 service, but no `DATABASE_URL`, `psql`, or `pg_isready` is available. A read-only connection probe to the local server using the available local account names was rejected. No production or local test migrations were applied, and database integration tests were skipped. CI is configured to start a disposable PostgreSQL 17 service, run migrations, then run unit, integration, and browser suites; that GitHub workflow was not triggered from this checkout.
 
 Shared PostgreSQL rate limits cover Builder generation, Better Auth authentication, app creation, invitation create/resend, and publish/rollback. Non-production tests with explicit test auth bypass write quotas. Unit tests cover the retry response, fail-closed response, and test bypass. The PostgreSQL integration suite includes learner progress separation, per-member private Studio reflections, owner-only brief visibility, stale-write rejection, per-learner archive behavior, and a concurrency check that expects exactly five of twelve simultaneous requests to consume a five-request quota. These will execute in CI after the committed migrations are applied.
 
 Studio local copies are stored by linked learner when a browser switches accounts. A regression test verifies that switching to another linked learner hides the first learner's device-local project and restores it only when switching back.
+
+Mission browser saves also switch by linked learner. A unit regression test verifies that one account's mission position is hidden for another account and restored when returning to the original account.
 
 ## Hosted-service evidence
 
