@@ -10,6 +10,7 @@
 - [x] CI workflow runs against a disposable PostgreSQL 17 service.
 - [x] Builder, Better Auth, app creation, invitation create/resend, and publish/rollback limits share one atomic PostgreSQL-backed fixed-window limiter; managed deployment still requires migration `0004`.
 - [x] Better Auth email/password identities and server-side app membership authorization exist.
+- [x] Verification and password-reset requests fail clearly when required email delivery is unavailable; delivery logs omit recipient and token URL.
 - [x] Existing app versions, preview/production runtime, publication, and rollback are PostgreSQL-backed.
 - [x] Generated app execution remains declarative and constrained.
 - [x] Six Missions' checkpoints and attempt/skill progress persist per authenticated learner, migrate a local save when no account record exists, and use revision checks for multi-device writes.

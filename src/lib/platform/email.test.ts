@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { renderInvitationEmail, sendInvitationEmail } from "./email";
+import { renderInvitationEmail, sendInvitationEmail, sendRequiredAccountActionEmail } from "./email";
 
 afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); });
 
 const invitation = { recipient: "learner@example.test", accountName: "Ari & Co", inviterName: "Ari <admin>", expiresAt: "2027-01-01T00:00:00.000Z", invitationUrl: "https://buildloop.example/invite/random-token" };
+const accountAction = { recipient: "learner@example.test", subject: "Verify your BuildLoop email", introduction: "Confirm your email address.", actionLabel: "Verify email", actionUrl: "http://localhost:3000/verify?token=secret" };
 
 describe("invitation email", () => {
   it("renders a clear text and escaped HTML invitation", () => {
@@ -32,5 +33,15 @@ describe("invitation email", () => {
     expect(String(request.body)).toContain("learner@example.test");
     fetch.mockResolvedValueOnce({ ok: false, status: 503 });
     expect(await sendInvitationEmail(invitation)).toBe("failed");
+  });
+
+  it("fails required account actions when email is unconfigured or the provider rejects delivery", async () => {
+    vi.stubEnv("PUBLIC_APP_URL", "http://localhost:3000");
+    vi.stubEnv("RESEND_API_KEY", ""); vi.stubEnv("EMAIL_FROM", "");
+    await expect(sendRequiredAccountActionEmail(accountAction)).rejects.toThrow("could not deliver the account email");
+
+    vi.stubEnv("RESEND_API_KEY", "test-resend-key"); vi.stubEnv("EMAIL_FROM", "BuildLoop <invites@example.test>");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 503 }));
+    await expect(sendRequiredAccountActionEmail(accountAction)).rejects.toThrow("could not deliver the account email");
   });
 });

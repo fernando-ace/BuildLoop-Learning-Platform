@@ -4,13 +4,17 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { getPlatformDatabase } from "./database";
 import { authAccounts, authSessions, authVerifications, platformUsers } from "./schema";
 import { getBuildLoopEnvironment, getPublicAppUrl } from "./config";
-import { sendAccountActionEmail } from "./email";
+import { sendRequiredAccountActionEmail, type AccountActionEmail } from "./email";
 import { logEvent } from "./logger";
 import { consumeOperationLimit } from "./rate-limit";
 
-async function deliverAuthEmail(kind: "verification" | "password_reset", message: Parameters<typeof sendAccountActionEmail>[0]) {
-  const status = await sendAccountActionEmail(message);
-  if (status !== "sent") logEvent("warn", `email.${kind}_unavailable`, { result: status });
+async function deliverAuthEmail(kind: "verification" | "password_reset", message: AccountActionEmail) {
+  try {
+    await sendRequiredAccountActionEmail(message);
+  } catch {
+    logEvent("warn", `email.${kind}_unavailable`);
+    throw new Error("BuildLoop could not deliver the account email. Try again later.");
+  }
 }
 
 function createAuth() {

@@ -79,6 +79,11 @@ export async function sendAccountActionEmail(message: AccountActionEmail) {
   return result;
 }
 
+export async function sendRequiredAccountActionEmail(message: AccountActionEmail) {
+  const result = await sendAccountActionEmail(message);
+  if (result !== "sent") throw new Error("BuildLoop could not deliver the account email. Try again later.");
+}
+
 export async function sendInvitationEmail(invitation: InvitationEmail): Promise<EmailDelivery> {
   const rendered = renderInvitationEmail(invitation);
   return deliver(invitation.recipient, rendered);

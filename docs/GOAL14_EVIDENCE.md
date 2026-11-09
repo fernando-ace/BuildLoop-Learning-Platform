@@ -14,6 +14,8 @@ Updated 2026-11-09 from the isolated `goal-14-production-readiness` worktree. Th
 | `npx drizzle-kit check` | Passed | Migration journal and snapshots are internally consistent. This does not apply migrations to a database. |
 | `git diff --check` | Passed | No whitespace errors in the reviewed changes. |
 
+The focused `src/lib/platform/email.test.ts` suite passed (4 tests) after hardening required verification/password-reset email delivery. Typecheck and lint completed successfully. Required account-action mail now surfaces a generic retryable error if Resend is unconfigured or rejects delivery; logs contain no recipient or action URL.
+
 ## Browser and database checks
 
 `npm run test:e2e` ran 33 Chromium cases: 20 passed and 13 Studio cases failed during shared setup. The test-auth endpoint could not create its test user because this worktree has no `DATABASE_URL`. The 13 failures report `Test authentication is not configured.` and happen before the Studio flows run; they are environment-blocked, not passing Studio evidence.
