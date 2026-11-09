@@ -10,6 +10,7 @@ permissions:
 
 jobs:
   quality:
+    name: BuildLoop CI quality
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -34,11 +35,14 @@ jobs:
       DATABASE_POOL_MAX: 3
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
       - run: npm ci
+      - run: npx drizzle-kit check
       - run: npm run db:migrate
       - run: npm run typecheck
       - run: npm run lint
@@ -46,3 +50,5 @@ jobs:
       - run: npm run test:e2e
       - run: npm run build
       - run: npm audit
+      - name: Check PR and push diff whitespace
+        run: git diff --check "${{ github.event.before || github.event.pull_request.base.sha }}...${{ github.sha }}"

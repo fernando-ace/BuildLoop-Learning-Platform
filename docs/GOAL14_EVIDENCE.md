@@ -20,6 +20,8 @@ The focused migration-target suite passed (13 tests). It covers remote and produ
 
 The Studio Builder route suite passed (7 tests), including hosted configuration with deterministic mode set: the deterministic provider is rejected and the shared learner quota is still consumed. Full test, typecheck, lint, and build checks passed after this change.
 
+CI now uses full Git history for PR/push whitespace validation, runs `npx drizzle-kit check` before applying migrations, and names its required job check `BuildLoop CI quality`. Node 22 is declared in `package.json` engines and the matching root package-lock entry; the local Node runtime was 22.17.1. The workflow YAML parsed successfully and the migration journal check passed locally. No GitHub Actions run was triggered because the workflow is not yet present on the remote default branch.
+
 ## Browser and database checks
 
 `npm run test:e2e` ran 33 Chromium cases: 20 passed and 13 Studio cases failed during shared setup. The test-auth endpoint could not create its test user because this worktree has no `DATABASE_URL`. The 13 failures report `Test authentication is not configured.` and happen before the Studio flows run; they are environment-blocked, not passing Studio evidence.

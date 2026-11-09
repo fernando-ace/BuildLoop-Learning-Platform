@@ -2,7 +2,7 @@
 
 ## Runtime architecture
 
-BuildLoop is a Next.js 16 App Router application running on Node.js 22. It is not a static site: authentication, application APIs, and generated-app data use server route handlers and PostgreSQL. Vercel is the intended host. PostgreSQL is a separately managed service; use a dedicated production database and a separate preview/test database. Do not reuse another product's database.
+BuildLoop is a Next.js 16 App Router application running on Node.js 22 (`package.json` enforces Node `>=22 <23`). It is not a static site: authentication, application APIs, and generated-app data use server route handlers and PostgreSQL. Vercel is the intended host. PostgreSQL is a separately managed service; use a dedicated production database and a separate preview/test database. Do not reuse another product's database.
 
 Production application data is in PostgreSQL. The legacy SQLite store under `.buildloop-data` is import-only and must not be mounted as production state. Generated apps execute as validated declarative artifacts in BuildLoop's fixed interpreter; they do not execute arbitrary code on the host.
 
@@ -50,7 +50,7 @@ Never use `NEXT_PUBLIC_` for secrets. Vercel's built-in environment values provi
 
 ## Preview and production release
 
-1. Open a pull request. GitHub Actions runs clean install, migration against disposable PostgreSQL 17, typecheck, lint, unit and PostgreSQL integration tests, Playwright browser tests, production build, and production dependency audit.
+1. Open a pull request. GitHub Actions runs a clean install, validates the Drizzle migration journal, applies migrations to disposable PostgreSQL 17, checks PR diff whitespace, then runs typecheck, lint, unit and PostgreSQL integration tests, Playwright browser tests, the production build, and dependency audit.
 2. Configure Vercel's Git integration for this repository and separate Preview and Production variables. Preview needs its own persistent disposable database if the full platform is to be exercised.
 3. Require the CI workflow before merging to `master`; configure this branch protection in GitHub. Vercel can create Preview builds for pull requests after the project is connected.
 4. Before promotion, review committed SQL and run the migration command against the intended environment. Production requires an explicit opt-in:

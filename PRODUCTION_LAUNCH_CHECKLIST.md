@@ -2,7 +2,8 @@
 
 ## Implemented and verifiable in this repository
 
-- [x] Node.js full-server deployment architecture documented for Next.js 16.
+- [x] Node.js full-server deployment architecture documented for Next.js 16; Node 22 is pinned in CI and enforced by package engines.
+- [x] CI validates the Drizzle migration journal and runs `git diff --check` across each PR/push diff.
 - [x] PostgreSQL migration command requires an explicit production opt-in and TLS URL.
 - [x] Production migration command rejects localhost.
 - [x] Production migration command requires TLS-enforcing `sslmode=require`, `verify-ca`, or `verify-full`; it rejects plaintext-fallback modes.
@@ -30,7 +31,7 @@
 - [ ] Connect `fernando-ace/BuildLoop-Learning-Platform` to the Vercel project after Preview/Production databases and environment settings are ready.
 - [ ] Provision dedicated managed PostgreSQL databases for Preview and Production; use TLS, pooled app connections, and a separate migration connection when provider guidance requires it.
 - [ ] Configure Vercel Preview and Production variables: `DATABASE_URL`, `DATABASE_POOL_MAX`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `PUBLIC_APP_URL`, `BUILDLOOP_ENVIRONMENT`, `RESEND_API_KEY`, and `EMAIL_FROM`.
-- [ ] Configure GitHub branch protection to require BuildLoop CI before merging to `master` and configure Vercel production promotion rules.
+- [ ] Configure GitHub branch protection to require `BuildLoop CI quality` before merging to `master` (after the workflow is available on the default branch) and configure Vercel production promotion rules.
 - [ ] Choose production origin, add it to hosting, and configure DNS/TLS after domain ownership is confirmed.
 - [ ] Enable managed database automated backups (7-day retention minimum) and PITR if available; follow [the operations runbook](docs/OPERATIONS_RUNBOOK.md).
 - [ ] Verify the sender domain and invitation, verification, and password-reset email delivery with the chosen provider.
