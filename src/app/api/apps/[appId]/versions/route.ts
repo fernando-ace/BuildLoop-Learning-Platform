@@ -20,6 +20,8 @@ export async function GET(request: Request, context: Context) {
   try {
     const user = await requireIdentity(request);
     const { appId } = await context.params;
+    const versionId = new URL(request.url).searchParams.get("versionId");
+    if (versionId) return Response.json({ version: await getPlatformRepository().readVersion(user.id, appId, versionId) }, { headers: { "Cache-Control": "no-store" } });
     const application = await getPlatformRepository().getApplication(user.id, appId);
     return Response.json({ application }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) { return responseForPlatformError(error); }

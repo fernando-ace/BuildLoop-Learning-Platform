@@ -1,0 +1,1 @@
+ALTER TABLE "studio_learner_progress" ADD COLUMN "archived" boolean DEFAULT false NOT NULL;

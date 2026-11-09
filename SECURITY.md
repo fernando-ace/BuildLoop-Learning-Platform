@@ -20,7 +20,7 @@ Database, Better Auth, Builder, and email credentials are server-only. Never use
 - Configure a verified sender and verify email-confirmation and password-reset links before allowing untrusted public signups.
 - Configure Sentry and verify a test event; extend structured audit events to cover authentication denials, invitation mail/acceptance failures, publishing, rollback, and provider failures.
 - Complete production-origin, CSRF, content-security-policy, and generated-app iframe review against the deployed configuration.
-- Add cross-account tests for any new user-level learner state endpoints; learner notes must be private to the owning user even when the associated application is shared with account members.
+- Learner Mission rows are keyed by the session user. Studio learning rows are keyed by session user and app membership; project reflection is never placed in shared app metadata for collaborators. Unit/API tests cover user scoping, membership checks, and stale revisions.
 
 ## Threat assumptions
 

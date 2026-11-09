@@ -15,6 +15,20 @@
       "when": 1794206327976,
       "tag": "0001_learner_progress",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794207446112,
+      "tag": "0002_private_studio_learner_progress",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1794208823451,
+      "tag": "0003_studio_project_tombstones",
+      "breakpoints": true
     }
   ]
 }

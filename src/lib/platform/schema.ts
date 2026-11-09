@@ -87,6 +87,21 @@ export const applications = pgTable("applications", {
   createdAt: createdAt(),
 }, (table) => [uniqueIndex("applications_slug_uq").on(table.slug), uniqueIndex("applications_project_uq").on(table.projectId)]);
 
+/** Private Studio reflections remain learner-owned even when the associated app has collaborators. */
+export const studioLearnerProgress = pgTable("studio_learner_progress", {
+  userId: text("user_id").notNull().references(() => platformUsers.id, { onDelete: "cascade" }),
+  appId: text("app_id").notNull().references(() => applications.id, { onDelete: "cascade" }),
+  stage: text("stage").notNull().default("idea"),
+  projectNotes: jsonb("project_notes").notNull().default({}),
+  features: jsonb("features").notNull().default([]),
+  observations: jsonb("observations").notNull().default([]),
+  feedback: jsonb("feedback").notNull().default([]),
+  versionNotes: jsonb("version_notes").notNull().default([]),
+  archived: boolean("archived").notNull().default(false),
+  revision: integer("revision").notNull().default(1),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [primaryKey({ columns: [table.userId, table.appId] }), index("studio_learner_progress_app_idx").on(table.appId), check("studio_learner_progress_stage_valid", sql`${table.stage} in ('idea', 'scope', 'brief', 'try', 'feedback', 'goal', 'retest', 'summary')`), check("studio_learner_progress_revision_positive", sql`${table.revision} > 0`)]);
+
 export const applicationVersions = pgTable("application_versions", {
   appId: text("app_id").notNull().references(() => applications.id, { onDelete: "cascade" }),
   versionId: text("version_id").notNull(),

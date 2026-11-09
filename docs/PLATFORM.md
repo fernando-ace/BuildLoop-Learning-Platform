@@ -17,7 +17,13 @@ To import previously published V4 shared apps from a Goal 12 SQLite file, first 
 npm run db:import-sqlite -- --source .buildloop-data/shared.sqlite --owner-email owner@example.com
 ```
 
-Review the app IDs and version counts. Add `--apply` to import all validated apps in one PostgreSQL transaction. The source SQLite file is opened read-only. Imports preserve V4 versions, the selected production version, its current records, preview records, and audit event details; legacy actor IDs are retained as audit metadata and attributed to the selected account. Stable IDs make an exact repeat safe. The tool stops before writing if a saved version, record, or audit entry is malformed. It does not import browser-local Mission progress or Studio coaching notes, and it does not convert non-V4 shared app schemas.
+Review the app IDs and version counts. Add `--apply` to import all validated apps in one PostgreSQL transaction. The source SQLite file is opened read-only. Imports preserve V4 versions, the selected production version, its current records, preview records, and audit event details; legacy actor IDs are retained as audit metadata and attributed to the selected account. Stable IDs make an exact repeat safe. The tool stops before writing if a saved version, record, or audit entry is malformed. Browser-local Mission progress and Studio coaching notes use the signed-in learner sync described below; they are not part of this SQLite import. The tool does not convert non-V4 shared app schemas.
+
+## Learner progress and privacy
+
+Mission state is stored in `learner_progress`, keyed only by the authenticated user ID. Its six mission checkpoints and progress records include completion, attempt history, latest/best skills, and resume stage. Studio reflection is stored separately in `studio_learner_progress`, keyed by authenticated user and app. The record has explicit fields for stage, project notes, feature choices, observations, feedback, and per-version learning notes. App members can each keep private notes; the server never trusts a user ID from the request body.
+
+Both APIs use compare-and-swap revisions. A stale browser cannot replace a newer account record silently. When an older browser save is first uploaded, the browser copy stays in local storage; a collision asks the learner which copy to keep and keeps a backup of the other copy locally. Studio app identity, version summaries, and artifacts are read through app-membership-checked PostgreSQL queries; version artifacts load on demand. The SQLite app importer does not migrate learner records.
 
 ## Tenant model
 

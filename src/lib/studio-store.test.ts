@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createProject, recordBuild } from "./studio";
 import { v2Fixtures } from "./builder/v2";
-import { createStudioProject, migrateStudioProject, migrateStudioState, openStudioProject, updateStudioProject, getStudioState } from "./studio-store";
+import { buildStudioProjectsFromCloud, createStudioProject, getStudioLearnerSnapshot, migrateStudioProject, migrateStudioState, openStudioProject, updateStudioProject, getStudioState } from "./studio-store";
 
 describe("Studio v1 save compatibility", () => {
   it("keeps a saved V1 artifact immutable in history after a V2 build", () => {
@@ -32,6 +32,19 @@ describe("Studio v1 save compatibility", () => {
 
   it("returns a safe empty state for an unparseable save shape", () => {
     expect(migrateStudioState("not an object")).toEqual({ projects: [], activeId: null, screen: "missions" });
+  });
+
+  it("restores app versions and private learning notes into a Studio project on a new device", () => {
+    const project = buildStudioProjectsFromCloud([{ id: "app_cloud", name: "Study planner", brief: {}, createdAt: "2026-11-01T00:00:00.000Z", versions: [{ number: 1, versionId: "v1", title: "Planner", description: "A first build", builtAt: "2026-11-02T00:00:00.000Z", provider: "demo" }] }], [{
+      appId: "app_cloud", revision: 2, stage: "feedback", updatedAt: "2026-11-03T00:00:00.000Z",
+      projectNotes: { user: "A student", problem: "They miss assignments", why: "Planning helps", behavior: "Track classes", constraints: "", instruction: "Build a planner", brief: null, nextGoal: "Try reminders", shareDecision: "" },
+      features: [{ id: "classes", text: "Class list", inV1: true }], observations: [], feedback: [],
+      versionNotes: [{ number: 1, instruction: "Build a planner", builtAt: "2026-11-02T00:00:00.000Z", notes: "Test the schedule", tested: true, observations: [], feedback: [], retestedVersion: null }],
+    }]);
+    expect(project).toHaveLength(1);
+    expect(project[0]).toMatchObject({ id: "app_cloud", problem: "They miss assignments", stage: "feedback", features: [{ inV1: true }], versions: [{ versionId: "v1", instruction: "Build a planner", tested: true }] });
+    expect(project[0].versions[0].result.artifact).toBeUndefined();
+    expect(getStudioLearnerSnapshot(project[0]).projectNotes.problem).toBe("They miss assignments");
   });
 
   it("marks an abandoned in-memory build failed when the learner reopens its project", () => {

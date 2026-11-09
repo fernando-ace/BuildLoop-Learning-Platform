@@ -16,6 +16,7 @@ import { diffV4ApplicationSchemas } from "@/lib/builder/schema-diff-v4";
 import type { GeneratedAppV4 } from "@/lib/builder/v4";
 import type { StudioMigrationProvenance } from "@/lib/studio";
 import { createStudioProject, deleteStudioProject, getServerStudioState, getStudioState, getStudioStorageMessage, openStudioProject, setStudioStage, showStudioHub, subscribeStudio, updateStudioProject } from "@/lib/studio-store";
+import { getStudioSyncState, initializeStudioCloudSync, keepStudioThisDeviceCopy, retryStudioCloudSync, selectStudioAccountCopy, subscribeStudioSync } from "@/lib/studio-cloud-sync";
 
 const labels: Record<StudioStage, string> = { idea: "Your idea", scope: "Version 1", brief: "Builder Brief", try: "Try it", feedback: "Feedback", goal: "Next goal", retest: "Retest", summary: "Project summary" };
 const stages: StudioStage[] = ["idea", "scope", "brief", "try", "feedback", "goal", "retest", "summary"];
@@ -182,6 +183,8 @@ function NewProjectForm() {
 
 export function Studio({ onBack, courseComplete }: { onBack: () => void; courseComplete: boolean }) {
   const state = useSyncExternalStore(subscribeStudio, getStudioState, getServerStudioState);
+  const cloudState = useSyncExternalStore(subscribeStudioSync, getStudioSyncState, () => "loading");
+  useEffect(() => { void initializeStudioCloudSync(); }, []);
   const project = currentProject(state);
   const [featureDraft, setFeatureDraft] = useState("");
   const [feedbackFrom, setFeedbackFrom] = useState("");
@@ -192,6 +195,30 @@ export function Studio({ onBack, courseComplete }: { onBack: () => void; courseC
   const [nearby, setNearby] = useState("");
   const [building, setBuilding] = useState(false);
   const [viewingVersion, setViewingVersion] = useState<number | null>(null);
+  const requestedCloudVersions = useRef(new Set<string>());
+  const latestVersion = project?.versions.at(-1);
+  const previousVersion = project?.versions.at(-2);
+  useEffect(() => {
+    if (!project || !(latestVersion || previousVersion)) return;
+    const missing = [previousVersion, latestVersion].filter((version): version is NonNullable<typeof version> => Boolean(version && !version.result.artifact && version.versionId));
+    if (!missing.length) return;
+    const key = `${project.id}:${missing.map((version) => version.number).join(",")}`;
+    if (requestedCloudVersions.current.has(key)) return;
+    requestedCloudVersions.current.add(key);
+    void Promise.all(missing.map(async (version) => {
+      const response = await fetch(`/api/apps/${encodeURIComponent(project.id)}/versions?versionId=${encodeURIComponent(version.versionId!)}`, { cache: "no-store" });
+      if (!response.ok) return null;
+      const payload = await response.json() as { version?: { artifact?: unknown } };
+      const checked = validateArtifact(payload.version?.artifact);
+      return checked.ok ? { number: version.number, artifact: checked.artifact } : null;
+    })).then((loaded) => {
+      const artifacts = loaded.filter((item): item is { number: number; artifact: NonNullable<StudioProject["versions"][number]["result"]["artifact"]> } => Boolean(item));
+      if (artifacts.length) updateStudioProject(project.id, (current) => ({ ...current, versions: current.versions.map((version) => {
+        const saved = artifacts.find((item) => item.number === version.number);
+        return saved ? { ...version, result: { ...version.result, artifact: saved.artifact } } : version;
+      }) }));
+    }).catch(() => undefined).finally(() => { requestedCloudVersions.current.delete(key); });
+  }, [project, latestVersion, previousVersion]);
   const patch = (changes: Partial<StudioProject>) => { if (project) updateStudioProject(project.id, (value) => ({ ...value, ...changes })); };
   const advance = (stage: StudioStage) => { if (project) setStudioStage(project.id, stage); };
   const build = async (instruction: string, afterBuild: StudioStage = "try") => {
@@ -199,7 +226,17 @@ export function Studio({ onBack, courseComplete }: { onBack: () => void; courseC
     setBuilding(true);
     updateStudioProject(project.id, (current) => ({ ...setBuildState(current, "building", { attempts: (current.build?.attempts ?? 0) + 1, startedAt: new Date().toISOString() }), stage: current.stage }));
     try {
-      const request = { appId: project.id, project: { name: project.name, user: project.user, problem: project.problem, why: project.why, behavior: project.behavior, constraints: project.constraints, inScope: project.features.filter((item) => item.inV1).map((item) => item.text), laterIdeas: project.features.filter((item) => !item.inV1).map((item) => item.text) }, mode: project.versions.length ? "iteration" : "initial", version: project.versions.length + 1, instruction: instruction.trim(), previous: project.versions.at(-1)?.result.artifact, observations: project.observations.slice(-8), feedback: project.feedback.slice(-8) };
+      let previousArtifact = project.versions.at(-1)?.result.artifact;
+      const latest = project.versions.at(-1);
+      if (latest && !previousArtifact && latest.versionId) {
+        const saved = await fetch(`/api/apps/${encodeURIComponent(project.id)}/versions?versionId=${encodeURIComponent(latest.versionId)}`, { cache: "no-store" });
+        const payload = await saved.json() as { version?: { artifact?: unknown }; error?: string };
+        const checked = saved.ok ? validateArtifact(payload.version?.artifact) : null;
+        if (!checked?.ok) throw new Error(payload.error || "The saved version could not be loaded. Your notes are still safe.");
+        previousArtifact = checked.artifact;
+        updateStudioProject(project.id, (current) => ({ ...current, versions: current.versions.map((version) => version.number === latest.number ? { ...version, result: { ...version.result, artifact: checked.artifact } } : version) }));
+      }
+      const request = { appId: project.id, project: { name: project.name, user: project.user, problem: project.problem, why: project.why, behavior: project.behavior, constraints: project.constraints, inScope: project.features.filter((item) => item.inV1).map((item) => item.text), laterIdeas: project.features.filter((item) => !item.inV1).map((item) => item.text) }, mode: project.versions.length ? "iteration" : "initial", version: project.versions.length + 1, instruction: instruction.trim(), previous: previousArtifact, observations: project.observations.slice(-8), feedback: project.feedback.slice(-8) };
       const response = await fetch("/api/studio/build", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(request) });
       const payload = await response.json() as { provider?: "openai" | "deterministic"; artifact?: unknown; attempts?: number; usage?: { inputTokens?: number; outputTokens?: number }; error?: string };
       if (!response.ok) throw new Error(payload.error || "The Builder couldn't finish this version. Your project is safe; try again.");
@@ -213,8 +250,22 @@ export function Studio({ onBack, courseComplete }: { onBack: () => void; courseC
       updateStudioProject(project.id, (current) => ({ ...setBuildState(current, "failed", { message }), stage: current.stage }));
     } finally { setBuilding(false); }
   };
+  const loadPreview = async (version: StudioProject["versions"][number]) => {
+    if (!project) return;
+    if (version.result.artifact) { setViewingVersion(version.number); return; }
+    if (!version.versionId) return;
+    try {
+      const response = await fetch(`/api/apps/${encodeURIComponent(project.id)}/versions?versionId=${encodeURIComponent(version.versionId)}`, { cache: "no-store" });
+      const payload = await response.json() as { version?: { artifact?: unknown } };
+      const checked = response.ok ? validateArtifact(payload.version?.artifact) : null;
+      if (checked?.ok) {
+        updateStudioProject(project.id, (current) => ({ ...current, versions: current.versions.map((item) => item.number === version.number ? { ...item, result: { ...item.result, artifact: checked.artifact } } : item) }));
+        setViewingVersion(version.number);
+      }
+    } catch { /* The saved version remains available in the account and can be retried. */ }
+  };
   const back = <button className="text-button" onClick={onBack} type="button">← Back to Missions</button>;
-  const frame = (content: ReactNode) => <div className="studio-shell"><header className="studio-topbar"><div className="brand">build<span>loop</span></div><span className="hub-local">Studio · Saved on this device</span>{back}</header>{content}</div>;
+  const frame = (content: ReactNode) => <div className="studio-shell"><header className="studio-topbar"><div className="brand">build<span>loop</span></div><span className="hub-local">{cloudState === "synced" ? "Studio · Synced to your account" : "Studio · Saved on this device"}</span>{back}</header><StudioCloudNotice state={cloudState} />{content}</div>;
   if (state.screen === "hub") return frame(<main className="studio-main"><section className="studio-intro"><span className="eyebrow">BUILDLOOP STUDIO</span><h1>Use the workflow on something you care about.</h1><p>Start with a person and a problem. Build a small first version, try it, learn, and improve it.</p>{!courseComplete && <p className="studio-recommend">You can begin now. Completing the six Missions first is recommended.</p>}</section>
     <section className="studio-transition"><span className="eyebrow">LEARN THE WORKFLOW <span aria-hidden="true">→</span> USE THE WORKFLOW</span><p>{courseComplete ? "You practiced the workflow. Now use it on something you care about." : "A project you care about is a good place to practice."}</p></section><ProjectList projects={state.projects} /></main>);
 
@@ -281,7 +332,7 @@ export function Studio({ onBack, courseComplete }: { onBack: () => void; courseC
       {previousTest && <section className="studio-context"><span className="eyebrow">REPEAT YOUR VERSION {previousTest.version} TASK</span><p>You tried: {previousTest.action}</p><p>You expected: {previousTest.expected}</p><p>Then: {previousTest.happened}</p></section>}
       <article className="studio-result compact"><span className="eyebrow">VERSION {latest.number} · BUILDER CHANGE SUMMARY</span><p>{project.nextGoal}</p>{latest.result.artifact ? <ArtifactChanges items={latest.result.artifact.changeSummary} /> : <p>{latest.result.description}</p>}</article>
       {latest.migration && <MigrationSummary migration={latest.migration} />}
-      {project.versions.length > 1 && <SchemaComparison before={project.versions.at(-2)!} after={latest} />}
+      {project.versions.length > 1 && project.versions.at(-2)?.result.artifact && latest.result.artifact && <SchemaComparison before={project.versions.at(-2)!} after={latest} />}
       {latest.result.artifact && preview(latest.result.artifact, latest.number)}
       {latest.result.artifact?.format === "buildloop-app-v4" && <StudioV4Publish appId={project.id} versionNumber={latest.number} artifact={latest.result.artifact as GeneratedAppV4} />}
       {field("studio-version-notes", "A note for this version", latest.notes, (notes) => updateStudioProject(project.id, (current) => updateVersionNotes(current, notes)), "What do you want to remember about this update?")}
@@ -294,7 +345,7 @@ export function Studio({ onBack, courseComplete }: { onBack: () => void; courseC
       <section className="studio-evidence"><span className="eyebrow">WHAT YOU DID WELL</span><p>{summary.practiced.length ? summary.practiced.join(" · ") : "Each project is a chance to practice."}</p></section>
       {summary.practiceNext.length > 0 && <section className="studio-evidence"><span className="eyebrow">A COUPLE OF THINGS TO PRACTICE NEXT</span><p>{summary.practiceNext.join(" · ")}</p></section>}
       <section className="studio-share"><h2>Is this ready to share?</h2><p>Make a deliberate choice based on what you tested.</p><div><button className={`button ${project.shareDecision === "ready" ? "button-primary" : "button-quiet"}`} onClick={() => patch({ shareDecision: "ready" })}>Ready to share</button><button className={`button ${project.shareDecision === "keep_working" ? "button-primary" : "button-quiet"}`} onClick={() => patch({ shareDecision: "keep_working" })}>Keep working</button></div></section>
-      <div className="studio-history"><span className="eyebrow">PROJECT HISTORY</span>{project.versions.map((version, index) => <article key={version.number}><strong>Version {version.number}</strong><span>{new Date(version.builtAt).toLocaleString()}</span><p><b>Instruction:</b> {version.instruction}{version.notes && <> · <b>Note:</b> {version.notes}</>}</p><small>{version.tested ? "Tested" : "Not tested yet"}</small>{version.migration && <MigrationSummary migration={version.migration} />}{index > 0 && <SchemaComparison before={project.versions[index - 1]} after={version} />}{version.result.artifact && <button className="text-button" onClick={() => setViewingVersion(version.number)} type="button">Preview Version {version.number}</button>}</article>)}</div>
+      <div className="studio-history"><span className="eyebrow">PROJECT HISTORY</span>{project.versions.map((version, index) => <article key={version.number}><strong>Version {version.number}</strong><span>{new Date(version.builtAt).toLocaleString()}</span><p><b>Instruction:</b> {version.instruction}{version.notes && <> · <b>Note:</b> {version.notes}</>}</p><small>{version.tested ? "Tested" : "Not tested yet"}</small>{version.migration && <MigrationSummary migration={version.migration} />}{index > 0 && project.versions[index - 1].result.artifact && version.result.artifact && <SchemaComparison before={project.versions[index - 1]} after={version} />}<button className="text-button" onClick={() => void loadPreview(version)} type="button">{version.result.artifact ? `Preview Version ${version.number}` : `Load Version ${version.number} preview`}</button></article>)}</div>
       {viewingVersion !== null && (() => { const version = project.versions.find((item) => item.number === viewingVersion); return version?.result.artifact ? <section><h2>Version {version.number} preview</h2>{preview(version.result.artifact, version.number)}<button className="text-button" onClick={() => setViewingVersion(null)} type="button">Close older preview</button></section> : null; })()}
       <div className="studio-actions"><button className="button button-quiet" onClick={() => advance("goal")}>Build another version</button><button className="button button-primary" onClick={showStudioHub}>All Studio projects →</button></div></>;
   }
@@ -302,5 +353,16 @@ export function Studio({ onBack, courseComplete }: { onBack: () => void; courseC
   const buildNotice = project.build?.status === "failed" ? <section className="studio-build-error" role="alert"><strong>{project.build.message || "The Builder couldn't finish this version. Your project is safe; try again."}</strong><button className="button button-quiet" disabled={building} onClick={() => { const instruction = project.versions.length ? `${project.instruction}\n\nNext goal: ${project.nextGoal}` : project.instruction; void build(instruction, project.versions.length ? "retest" : "try"); }}>Retry build</button></section> : null;
   const buildingNotice = building || project.build?.status === "building" || project.build?.status === "validating" ? <p className="studio-building" role="status" aria-live="polite">{project.build?.status === "validating" ? "Checking that this version is safe to run…" : "The Builder is making your version…"}</p> : null;
   const storageNotice = getStudioStorageMessage() ? <p className="studio-build-error" role="status">{getStudioStorageMessage()}</p> : null;
-  return frame(<main className="studio-main studio-workspace"><div className="studio-workspace-nav"><button className="text-button" onClick={showStudioHub}>← All projects</button><button className="text-button studio-delete" onClick={() => { if (confirm(`Delete “${project.name}” and its history?`)) deleteStudioProject(project.id); }}>Delete project</button></div>{progress}{storageNotice}{buildingNotice}{buildNotice}{content}{editDetails}</main>);
+  return frame(<main className="studio-main studio-workspace"><div className="studio-workspace-nav"><button className="text-button" onClick={showStudioHub}>← All projects</button><button className="text-button studio-delete" onClick={() => { if (confirm(`Remove “${project.name}” from your Studio library? The account app and its other members will stay available.`)) deleteStudioProject(project.id); }}>Remove from Studio</button></div>{progress}{storageNotice}{buildingNotice}{buildNotice}{content}{editDetails}</main>);
+}
+
+function StudioCloudNotice({ state }: { state: string }) {
+  if (["loading", "synced", "local"].includes(state)) return null;
+  const conflict = state === "conflict";
+  const text = conflict
+    ? "This browser and your account have different Studio notes. Choose which copy to keep; the other copy is preserved on this device."
+    : state === "syncing"
+      ? "Syncing private Studio notes to your account…"
+      : "Studio account sync is temporarily unavailable. Your local project copy is still available.";
+  return <aside className="learner-sync-notice" role="status"><span>{text}</span>{conflict ? <span className="learner-sync-actions"><button className="button button-quiet" onClick={() => void selectStudioAccountCopy()} type="button">Use account copy</button><button className="button button-primary" onClick={() => void keepStudioThisDeviceCopy()} type="button">Keep this device’s copy</button></span> : state === "unavailable" ? <button className="button button-quiet" onClick={retryStudioCloudSync} type="button">Retry sync</button> : null}</aside>;
 }

@@ -15,7 +15,7 @@ export interface StudioMigrationProvenance {
   changes: Array<{ kind: string; collectionId?: string; fieldId?: string; itemId?: string; destructive?: boolean }>;
   warnings: string[];
 }
-export interface StudioVersion { number: number; instruction: string; builtAt: string; status: "complete"; notes: string; tested: boolean; result: BuilderResult; observations?: string[]; feedback?: string[]; retestedVersion?: number; migration?: StudioMigrationProvenance }
+export interface StudioVersion { number: number; versionId?: string; instruction: string; builtAt: string; status: "complete"; notes: string; tested: boolean; result: BuilderResult; observations?: string[]; feedback?: string[]; retestedVersion?: number; migration?: StudioMigrationProvenance }
 export interface BuilderBrief { user: string; problem: string; behavior: string; constraints: string; scope: string[] }
 export interface BuilderResult { title: string; description: string; provider: "demo" | "openai" | "deterministic"; instruction: string; artifact?: import("./builder/contract").GeneratedApp; attempts?: number; usage?: { inputTokens?: number; outputTokens?: number } }
 export interface StudioBuild { status: "ready" | "building" | "validating" | "complete" | "failed"; message?: string; attempts: number; startedAt?: string }
