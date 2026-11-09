@@ -8,13 +8,13 @@ Updated 2026-11-09 from the isolated `goal-14-production-readiness` worktree. Th
 | --- | --- | --- |
 | `npm run typecheck` | Passed | TypeScript check. |
 | `npm run lint` | Passed | ESLint. |
-| `npm test` | 216 passed, 9 skipped (225 total) | PostgreSQL integration tests skip without `DATABASE_URL`; see below. |
+| `npm test` | 229 passed, 9 skipped (238 total) | 39 test files passed; 2 skipped. PostgreSQL integration tests skip without `DATABASE_URL`; see below. |
 | `npm run build` | Passed | Next.js 16.4.5 production build. |
-| `npm audit --audit-level=moderate` | 0 vulnerabilities | Dependency audit at the time of this run. |
+| `npm audit --audit-level=moderate` | 0 vulnerabilities | Dependency audit run 2026-11-09. |
 | `npx drizzle-kit check` | Passed | Migration journal and snapshots are internally consistent. This does not apply migrations to a database. |
 | `git diff --check` | Passed | No whitespace errors in the reviewed changes. |
 
-The focused `src/lib/platform/email.test.ts` suite passed (4 tests) after hardening required verification/password-reset email delivery. Typecheck and lint completed successfully. Required account-action mail now surfaces a generic retryable error if Resend is unconfigured or rejects delivery; logs contain no recipient or action URL.
+The focused `src/lib/platform/email.test.ts` suite passed (4 tests) after hardening required verification/password-reset email delivery. Required account-action mail now surfaces a generic retryable error if Resend is unconfigured or rejects delivery; logs contain no recipient or action URL.
 
 The focused migration-target suite passed (12 tests). It covers remote and production opt-ins, production/local rejection including IPv6 loopback, Vercel environment mismatch, PostgreSQL URL validation, and TLS enforcement. Production accepts only `sslmode=require`, `verify-ca`, or `verify-full`; `prefer` and `allow` are rejected because they can fall back to plaintext. Typecheck and lint passed after this change.
 
