@@ -21,13 +21,13 @@ Configure variables independently for local development, Vercel Preview, and Ver
 | `BUILDLOOP_RELEASE` | Optional release label; commit SHA falls back to Vercel/Git metadata | Optional |
 | `NEXT_PUBLIC_BUILDLOOP_ENVIRONMENT` | Public environment label attached to client error events | Optional |
 | `NEXT_PUBLIC_BUILDLOOP_RELEASE` | Public release label attached to client error events | Optional |
-| `OPENAI_API_KEY` | Server-only key for live Builder generation | Required for hosted Builder use |
+| `OPENAI_API_KEY` | Server-only key for live Builder generation | Required for hosted Builder and readiness |
 | `BUILDLOOP_OPENAI_MODEL` | Server-only model selector | Optional |
 | `BUILDLOOP_BUILDER_MODE` | Deterministic fixture generation; accepted only in development and test, never Preview or Production | Development/test only |
-| `RESEND_API_KEY` | Server-only invitation, verification, and password-reset mail key | Required to enable hosted sign-up and account email |
-| `EMAIL_FROM` | Verified sender address for invitation, verification, and password-reset email | Required to enable hosted sign-up and account email |
-| `SENTRY_DSN` | Server/edge event destination | Optional until monitoring is activated |
-| `NEXT_PUBLIC_SENTRY_DSN` | Browser event destination; public project DSN, never an auth token | Optional until monitoring is activated |
+| `RESEND_API_KEY` | Server-only invitation, verification, and password-reset mail key | Required for hosted readiness and account email |
+| `EMAIL_FROM` | Verified sender address for invitation, verification, and password-reset email | Required for hosted readiness and account email |
+| `SENTRY_DSN` | Server/edge event destination | Required for hosted readiness; delivery must be verified separately |
+| `NEXT_PUBLIC_SENTRY_DSN` | Browser event destination; public project DSN, never an auth token | Required for hosted readiness; delivery must be verified separately |
 | `BUILDLOOP_ALLOW_REMOTE_MIGRATIONS` | Explicit one-command approval for a remote migration | Release command only; value `1` |
 | `BUILDLOOP_ALLOW_PRODUCTION_MIGRATIONS` | Second explicit one-command gate for Production migration | Production migration command only; value `1` |
 | `BUILDLOOP_AUTH_MODE` | Enables signed local browser-test identities | Development/test only; never hosted |
@@ -36,6 +36,8 @@ Configure variables independently for local development, Vercel Preview, and Ver
 | `BUILDLOOP_MONITORING_TEST` | Enables the safe Sentry test endpoint | Development/test only; never hosted |
 
 Never use `NEXT_PUBLIC_` for secrets. Vercel's built-in environment values provide deployment metadata; application code reports the environment and release through `/api/health`.
+
+`/api/health/ready` returns 503 in Preview/Production unless PostgreSQL, the migration journal, Better Auth configuration, account email, Builder, and both Sentry DSNs are available. Its hosted integration checks validate configuration presence and origin shape, not provider connectivity or successful delivery; verify email and monitoring with their safe end-to-end checks before launch. Development and test environments do not require those hosted integrations.
 
 `BUILDLOOP_SHARED_DB_PATH` belongs to a legacy SQLite repository module with no current production route callers; production app and learner records use PostgreSQL. Do not set it for hosted deployments. The local SQLite import command has its own explicit `--source` argument.
 
