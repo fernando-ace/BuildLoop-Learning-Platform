@@ -9,7 +9,7 @@ BuildLoop's platform layer uses PostgreSQL for app identity, memberships, versio
 3. Run `npm ci`, then `npm run db:migrate`, then `npm run dev`.
 4. Visit `/sign-in` to create an account or sign in. Studio creates an app record for the account before starting a build.
 
-`npm run db:generate` creates a SQL migration from `src/lib/platform/schema.ts`; review and commit that migration with the schema change. `npm run db:migrate` applies committed migrations. Do not use schema push against shared environments.
+`npm run db:generate` creates a SQL migration from `src/lib/platform/schema.ts`; review and commit that migration with the schema change. `npm run db:migrate` applies committed migrations. Remote migrations require `BUILDLOOP_ALLOW_REMOTE_MIGRATIONS=1`; production also requires `BUILDLOOP_ENVIRONMENT=production` and `BUILDLOOP_ALLOW_PRODUCTION_MIGRATIONS=1`, plus a TLS connection URL. Do not use schema push against shared environments.
 
 To import previously published V4 shared apps from a Goal 12 SQLite file, first create the target owner's BuildLoop account and apply the PostgreSQL migrations. Then run a read-only dry run:
 
@@ -23,7 +23,7 @@ Review the app IDs and version counts. Add `--apply` to import all validated app
 
 Each app has a platform owner, optional administrators, and members. Platform roles control project, membership, and publication operations. The separate `app_role` controls permissions defined by the selected V4 app artifact. Changing one role does not grant the other set of permissions. Every data query includes an app ID and environment, and composite foreign keys keep runtime rows attached to that tenant's preview or production environment.
 
-An invitation includes an optional email restriction, app role, expiry, and a one-time random token. PostgreSQL stores only the token's SHA-256 hash. Invitees must sign in before acceptance. Owners and administrators can revoke pending invitations and manage app-role assignments; only the owner can transfer ownership. The app currently displays a copyable URL and does not send email.
+An invitation includes an optional email restriction, app role, expiry, and a one-time random token. PostgreSQL stores only the token's SHA-256 hash. Invitees must sign in with a verified email before acceptance in production. Owners and administrators can revoke or resend pending email invitations and manage app-role assignments; only the owner can transfer ownership. When Resend is configured, email is sent from the configured verified sender; delivery failures preserve a copyable link. Resending rotates the token and invalidates its previous link.
 
 ## Environments and publishing
 
@@ -35,11 +35,11 @@ Publication and migration outcomes are kept in dedicated tables. Membership, inv
 
 The regular unit suite runs without PostgreSQL and skips its database integration cases. With `DATABASE_URL` pointing to a disposable database after `npm run db:migrate`, the platform integration suite checks tenant isolation, database constraints, invitation retries and expiry, ownership transfer, safe/unsafe migrations, concurrent publishing, and conflicting unique writes. The Playwright server uses a signed test identity only when it runs in development with `BUILDLOOP_AUTH_MODE=test`; the test-session route is unavailable in production. The deterministic Builder is a test provider and is not evidence of live OpenAI availability.
 
-Production must use HTTPS, a strong unique Better Auth secret, trusted configured origins, and managed PostgreSQL with backups and monitoring. Configure email verification policies and operational alerts before inviting external users. This repository work did not deploy or verify a hosted production environment. Local test identities and signing secrets must never be configured in production.
+Production must use HTTPS, a strong unique Better Auth secret, trusted configured origins, and managed PostgreSQL with backups and monitoring. Production and Preview require email verification and support password reset; configure `RESEND_API_KEY` and a verified `EMAIL_FROM` before enabling signups. This repository work did not deploy or verify a hosted production environment. Local test identities and signing secrets must never be configured in production.
 
 ## Current boundaries
 
 - Mission progress and the Studio learner workflow (briefs, observations, feedback, and reflection) remain browser-local; only application records and platform metadata are shared across devices.
-- Invitations are copied and shared manually; email delivery is not configured.
+- Invitation and account email delivery use the Resend API boundary; delivery is inactive until provider credentials and a verified sender are configured.
 - App schema migration supports the validated V4 runtime path. Legacy V4 SQLite shared apps have an explicit import command; local Studio projects and learner notes are not automatically imported into PostgreSQL.
 - There is no production deployment, hosted database, custom domain, realtime channel, team dashboard, or automated backup configuration in this checkout.

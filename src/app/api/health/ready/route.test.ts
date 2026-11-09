@@ -9,11 +9,11 @@ describe("readiness endpoint", () => {
   beforeEach(() => { query.mockReset(); vi.stubEnv("NODE_ENV", "test"); vi.stubEnv("BUILDLOOP_ENVIRONMENT", "test"); });
 
   it("returns ready only when PostgreSQL responds", async () => {
-    query.mockResolvedValue({ rows: [{ "?column?": 1 }] });
+    query.mockResolvedValueOnce({ rows: [{ "?column?": 1 }] }).mockResolvedValueOnce({ rows: [{ table_name: "drizzle.__drizzle_migrations" }] });
     const response = await GET(new Request("http://localhost/api/health/ready", { headers: { "x-request-id": "check-1" } }));
     expect(response.status).toBe(200);
     expect(response.headers.get("x-request-id")).toBe("check-1");
-    expect(await response.json()).toMatchObject({ status: "ready", checks: { database: "ok" }, environment: "test" });
+    expect(await response.json()).toMatchObject({ status: "ready", checks: { database: "ok", migrationJournal: "available" }, environment: "test" });
   });
 
   it("returns a redacted 503 when PostgreSQL is unavailable", async () => {
@@ -24,5 +24,12 @@ describe("readiness endpoint", () => {
     expect(body).toContain('"database":"unavailable"');
     expect(body).not.toContain("password");
     expect(body).not.toContain("db.example");
+  });
+
+  it("returns not ready when the database exists but migrations were never applied", async () => {
+    query.mockResolvedValueOnce({ rows: [{ "?column?": 1 }] }).mockResolvedValueOnce({ rows: [{ table_name: null }] });
+    const response = await GET(new Request("http://localhost/api/health/ready"));
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ status: "not_ready", checks: { database: "ok", migrationJournal: "unavailable" } });
   });
 });

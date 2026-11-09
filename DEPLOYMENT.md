@@ -1,0 +1,64 @@
+# Deployment
+
+## Runtime architecture
+
+BuildLoop is a Next.js 16 App Router application running on Node.js 22. It is not a static site: authentication, application APIs, and generated-app data use server route handlers and PostgreSQL. Vercel is the intended host. PostgreSQL is a separately managed service; use a dedicated production database and a separate preview/test database. Do not reuse another product's database.
+
+Production application data is in PostgreSQL. The legacy SQLite store under `.buildloop-data` is import-only and must not be mounted as production state. Generated apps execute as validated declarative artifacts in BuildLoop's fixed interpreter; they do not execute arbitrary code on the host.
+
+## Environments and required variables
+
+Configure variables independently for local development, Vercel Preview, and Vercel Production. Never copy production credentials into Preview.
+
+| Variable | Use | Required |
+| --- | --- | --- |
+| `DATABASE_URL` | PostgreSQL URL; use the provider's TLS connection string and pooled endpoint for application traffic | All hosted environments |
+| `DATABASE_POOL_MAX` | Per-instance pool ceiling; start at 3–5 and account for the maximum function instances and provider connection cap | Hosted |
+| `BETTER_AUTH_SECRET` | Random secret of at least 32 characters, unique per environment | Hosted |
+| `BETTER_AUTH_URL` | Canonical origin used by Better Auth | Hosted |
+| `PUBLIC_APP_URL` | Canonical HTTPS origin for trusted links and application URLs | Hosted |
+| `BUILDLOOP_ENVIRONMENT` | `development`, `test`, `preview`, or `production`; must match `VERCEL_ENV` when both are set | Local; hosted recommended |
+| `BUILDLOOP_RELEASE` | Optional release label; commit SHA falls back to Vercel/Git metadata | Optional |
+| `OPENAI_API_KEY` | Server-only key for live Builder generation | Optional |
+| `BUILDLOOP_OPENAI_MODEL` | Server-only model selector | Optional |
+| `RESEND_API_KEY` | Server-only invitation mail key | Optional until mail is activated |
+| `EMAIL_FROM` | Verified sender address | Optional until mail is activated |
+| `SENTRY_DSN` | Server/edge event destination | Optional until monitoring is activated |
+| `NEXT_PUBLIC_SENTRY_DSN` | Browser event destination; public project DSN, never an auth token | Optional until monitoring is activated |
+| `SENTRY_AUTH_TOKEN` | Build-time source-map upload token | Optional; configure in the build environment if source maps are enabled |
+
+Never use `NEXT_PUBLIC_` for secrets. Vercel's built-in environment values provide deployment metadata; application code reports the environment and release through `/api/health`.
+
+## Local setup
+
+1. Create a disposable local PostgreSQL database and copy `.env.example` to `.env.local`.
+2. Set the local database URL, Better Auth secret, and both application origins.
+3. Run `npm ci`, `npm run db:migrate`, and `npm run dev`.
+4. Sign up at `/sign-in`.
+
+`npm run db:generate` generates a migration from `src/lib/platform/schema.ts`. Review generated SQL, check that it is additive or otherwise rollout-safe, and commit it alongside the schema change. Do not edit an already-applied migration.
+
+## Preview and production release
+
+1. Open a pull request. GitHub Actions runs clean install, migration against disposable PostgreSQL 17, typecheck, lint, unit and PostgreSQL integration tests, Playwright browser tests, production build, and production dependency audit.
+2. Configure Vercel's Git integration for this repository and separate Preview and Production variables. Preview needs its own persistent disposable database if the full platform is to be exercised.
+3. Require the CI workflow before merging to `master`; configure this branch protection in GitHub. Vercel can create Preview builds for pull requests after the project is connected.
+4. Before promotion, review committed SQL and run the migration command against the intended environment. Production requires an explicit opt-in:
+
+   ```sh
+   BUILDLOOP_ENVIRONMENT=production BUILDLOOP_ALLOW_REMOTE_MIGRATIONS=1 BUILDLOOP_ALLOW_PRODUCTION_MIGRATIONS=1 npm run db:migrate
+   ```
+
+   The production URL must not point to localhost and must include `sslmode=require` or stronger. All remote databases require an explicit migration opt-in. The command applies committed forward migrations only; it never resets or seeds application data.
+5. Promote the tested Vercel deployment. Verify `/api/health/live`, `/api/health/ready`, authentication, database persistence, generated app preview, and a controlled publish/rollback before inviting users.
+6. Record the deployment URL, commit SHA, migration set, smoke-test results, and operator in the release record.
+
+The repository does not currently contain a Vercel project link or deployment credentials. Connect the Vercel project and provide Preview/Production runtime variables before a hosted release can run. Configure `DATABASE_POOL_MAX` against the provider's connection budget; the default ceiling is five connections per warm instance, so total demand scales with instance count.
+
+## Migration and rollback rules
+
+Migrations are an explicit release step, not a build hook and not an application startup side effect. If a migration fails, stop promotion, inspect the database migration journal and provider logs, and repair forward with a new reviewed migration. Do not manually delete migration history or attempt an automatic down migration.
+
+Use expand/migrate/contract for schema changes that overlap deployments: first add nullable columns/tables, deploy code compatible with both shapes, backfill in a bounded and resumable job, then remove old columns only in a later release after the old application is no longer deployed. Keep each application release compatible with the prior schema until promotion is confirmed. If the database has advanced and the application deployment fails, redeploy the previous application only when that version is compatible with the new schema; otherwise repair forward. Never restore a production database solely to roll back application code.
+
+Vercel deployment rollback restores application code/traffic. BuildLoop's in-product app-version rollback is a separate operation over a learner's published artifact and data. Neither should be used as a substitute for the other.

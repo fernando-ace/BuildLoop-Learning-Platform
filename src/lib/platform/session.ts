@@ -1,6 +1,7 @@
 import "server-only";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { getAuth } from "./auth";
+import { logEvent } from "./logger";
 
 export interface PlatformIdentity { id: string; name: string; email: string; }
 
@@ -37,6 +38,7 @@ export async function getPlatformIdentity(request: Request): Promise<PlatformIde
     const session = await getAuth().api.getSession({ headers: request.headers });
     return session ? { id: session.user.id, name: session.user.name, email: session.user.email } : null;
   } catch {
+    logEvent("warn", "auth.session_lookup_failed");
     return null;
   }
 }

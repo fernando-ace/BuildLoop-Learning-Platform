@@ -23,6 +23,7 @@ export default defineConfig({
       DATABASE_URL: process.env.DATABASE_URL ?? "",
       BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET ?? "local-e2e-only-auth-secret-never-use-in-production",
       BETTER_AUTH_URL: "http://127.0.0.1:3107",
+      PUBLIC_APP_URL: "http://127.0.0.1:3107",
     },
   },
 });

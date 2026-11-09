@@ -301,9 +301,12 @@ export class PlatformRepository {
     const token = randomBytes(32).toString("base64url");
     const id = randomUUID();
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-    await transaction(async (client) => {
+    const accountName = await transaction(async (client) => {
       const access = await membership(client, user.id, appId, true);
       requireAdmin(access.platform_role);
+      const application = await client.query<{ name: string }>("SELECT name FROM applications WHERE id=$1", [appId]);
+      const appName = application.rows[0]?.name;
+      if (!appName) throw new PlatformError("not_found", "That application is unavailable to your account.");
       const version = await client.query<{ artifact: GeneratedApp }>("SELECT artifact FROM application_versions WHERE app_id=$1 ORDER BY version_number DESC LIMIT 1", [appId]);
       if (!version.rowCount || version.rows[0].artifact.format !== "buildloop-app-v4") throw new PlatformError("conflict", "Build a role-based app before inviting collaborators.");
       const valid = validateArtifactV4(version.rows[0].artifact);
@@ -312,8 +315,25 @@ export class PlatformRepository {
       if (cleanEmail && (cleanEmail.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail))) throw new PlatformError("invalid", "Enter a valid email address.");
       await client.query("INSERT INTO app_invitations(id, app_id, invited_by, email, app_role, token_hash, expires_at) VALUES($1,$2,$3,$4,$5,$6,$7)", [id, appId, user.id, cleanEmail, appRole, hashToken(token), expiresAt]);
       await writeAudit(client, appId, user.id, "invitation.created", id, { appRole, expiresAt: expiresAt.toISOString() });
+      return appName;
     });
-    return { id, token, expiresAt: expiresAt.toISOString() };
+    return { id, token, expiresAt: expiresAt.toISOString(), accountName };
+  }
+
+  async resendInvitation(user: PlatformIdentity, appId: string, invitationId: string) {
+    const token = randomBytes(32).toString("base64url");
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    return transaction(async (client) => {
+      const access = await membership(client, user.id, appId, true);
+      requireAdmin(access.platform_role);
+      const selected = await client.query<{ email: string | null; app_name: string; status: string }>("SELECT i.email,a.name AS app_name,i.status FROM app_invitations i JOIN applications a ON a.id=i.app_id WHERE i.id=$1 AND i.app_id=$2 FOR UPDATE OF i", [invitationId, appId]);
+      const invitation = selected.rows[0];
+      if (!invitation || invitation.status !== "pending" || !invitation.email) throw new PlatformError("not_found", "That pending email invitation is unavailable.");
+      const updated = await client.query("UPDATE app_invitations SET token_hash=$3,expires_at=$4 WHERE app_id=$1 AND id=$2 AND status='pending'", [appId, invitationId, hashToken(token), expiresAt]);
+      if (!updated.rowCount) throw new PlatformError("conflict", "That invitation changed. Reload before resending it.");
+      await writeAudit(client, appId, user.id, "invitation.resent", invitationId, { expiresAt: expiresAt.toISOString() });
+      return { id: invitationId, token, email: invitation.email, accountName: invitation.app_name, expiresAt: expiresAt.toISOString() };
+    });
   }
 
   async acceptInvitation(user: PlatformIdentity, token: string) {

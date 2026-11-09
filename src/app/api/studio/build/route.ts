@@ -2,6 +2,9 @@ import { BuilderError, MAX_BUILDER_INPUT_CHARS, validateArtifact, type BuilderRe
 import { getBuilder } from "@/lib/builder/provider";
 import { getPlatformIdentity } from "@/lib/platform/session";
 import { getPlatformRepository, PlatformError } from "@/lib/platform/repository";
+import { sameOrigin } from "@/lib/platform/http";
+import { logEvent } from "@/lib/platform/logger";
+import * as Sentry from "@sentry/nextjs";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -11,14 +14,8 @@ const limits = { name: 80, user: 500, problem: 1000, why: 500, behavior: 1000, c
 
 function isBoundedText(value: unknown, max: number): value is string { return typeof value === "string" && value.length <= max; }
 function isRecord(value: unknown): value is Record<string, unknown> { return Boolean(value && typeof value === "object" && !Array.isArray(value)); }
-function allowedOrigin(request: Request) {
-  const origin = request.headers.get("origin");
-  if (!origin) return false;
-  try { return new URL(origin).host === request.headers.get("host"); } catch { return false; }
-}
-
 export async function POST(request: Request) {
-  if (!allowedOrigin(request)) return Response.json({ error: "The request could not be accepted." }, { status: 403 });
+  if (!sameOrigin(request)) return Response.json({ error: "The request could not be accepted." }, { status: 403 });
   const identity = await getPlatformIdentity(request);
   if (!identity) return Response.json({ error: "Sign in to build in Studio." }, { status: 401, headers: { "Cache-Control": "no-store" } });
   if (process.env.BUILDLOOP_BUILDER_MODE !== "deterministic") {
@@ -63,10 +60,13 @@ export async function POST(request: Request) {
   catch (error) {
     if (error instanceof PlatformError) return Response.json({ error: error.message, code: error.code }, { status: error.code === "forbidden" ? 403 : error.code === "conflict" ? 409 : 400, headers: { "Cache-Control": "no-store" } });
     if (error instanceof BuilderError) {
+      logEvent(error.code === "configuration" ? "warn" : "error", "builder.request_failed", { code: error.code, userId: identity.id, appId: value.appId });
       const status = error.code === "configuration" ? 503 : error.code === "invalid_output" ? 422 : error.code === "timeout" ? 504 : 502;
       const message = error.code === "configuration" ? "The Builder is not configured yet. Ask your project guide to set it up." : error.code === "invalid_output" ? "The Builder returned a version BuildLoop could not safely run. Your project is safe; try again." : "The Builder couldn't connect right now. Your project is safe. Try the build again.";
       return Response.json({ error: message, code: error.code }, { status });
     }
+    logEvent("error", "builder.unexpected_failure", { userId: identity.id, appId: value.appId, errorType: error instanceof Error ? error.name : "unknown" });
+    Sentry.captureException(error);
     return Response.json({ error: "The Builder couldn't finish this version. Your project is safe; try again." }, { status: 502 });
   }
 }

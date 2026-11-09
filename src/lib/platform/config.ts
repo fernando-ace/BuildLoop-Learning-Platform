@@ -15,8 +15,10 @@ export function getBuildLoopEnvironment(): BuildLoopEnvironment {
   return value;
 }
 
-export function getPublicAppUrl() {
-  const raw = process.env.PUBLIC_APP_URL;
+export function getPublicAppUrl(requestUrl?: string) {
+  const vercelOrigin = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined;
+  const requestOrigin = requestUrl ? new URL(requestUrl).origin : undefined;
+  const raw = process.env.PUBLIC_APP_URL ?? vercelOrigin ?? process.env.BETTER_AUTH_URL ?? (getBuildLoopEnvironment() === "production" ? undefined : requestOrigin ?? "http://localhost:3000");
   if (!raw) throw new Error("PUBLIC_APP_URL must be configured.");
   const url = new URL(raw);
   if (url.username || url.password || url.search || url.hash || (url.pathname !== "/" && url.pathname !== "")) throw new Error("PUBLIC_APP_URL must be an origin without credentials, path, query, or fragment.");

@@ -1,10 +1,16 @@
 import { getPlatformIdentity, type PlatformIdentity } from "./session";
 import { PlatformError } from "./repository";
+import { getBuildLoopEnvironment, getPublicAppUrl } from "./config";
+import { logEvent } from "./logger";
+import * as Sentry from "@sentry/nextjs";
 
 export function sameOrigin(request: Request) {
-  const origin = request.headers.get("origin"), host = request.headers.get("host");
-  if (!origin || !host) return false;
-  try { return new URL(origin).host === host; } catch { return false; }
+  const origin = request.headers.get("origin");
+  if (!origin) return false;
+  try {
+    const allowed = getPublicAppUrl(request.url);
+    return new URL(origin).origin === allowed && (getBuildLoopEnvironment() !== "production" || new URL(origin).protocol === "https:");
+  } catch { return false; }
 }
 
 export async function requireIdentity(request: Request): Promise<PlatformIdentity> {
@@ -14,7 +20,12 @@ export async function requireIdentity(request: Request): Promise<PlatformIdentit
 }
 
 export function responseForPlatformError(error: unknown) {
-  if (!(error instanceof PlatformError)) return Response.json({ error: "The app could not complete that request." }, { status: 500, headers: { "Cache-Control": "no-store" } });
+  if (!(error instanceof PlatformError)) {
+    logEvent("error", "platform.unexpected_failure", { errorType: error instanceof Error ? error.name : "unknown" });
+    Sentry.captureException(error);
+    return Response.json({ error: "The app could not complete that request." }, { status: 500, headers: { "Cache-Control": "no-store" } });
+  }
+  logEvent(error.code === "forbidden" || error.code === "unauthenticated" ? "warn" : "info", "platform.request_rejected", { code: error.code });
   const status = error.code === "unauthenticated" ? 401 : error.code === "not_found" ? 404 : error.code === "forbidden" ? 403 : error.code === "conflict" ? 409 : error.code === "unavailable" ? 503 : 400;
   return Response.json({ error: error.message, code: error.code }, { status, headers: { "Cache-Control": "no-store" } });
 }

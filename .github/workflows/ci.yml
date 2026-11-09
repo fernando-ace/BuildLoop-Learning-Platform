@@ -1,0 +1,48 @@
+name: BuildLoop CI
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: buildloop_test
+          POSTGRES_USER: buildloop
+          POSTGRES_PASSWORD: buildloop_test_only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U buildloop -d buildloop_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://buildloop:buildloop_test_only@localhost:5432/buildloop_test
+      BUILDLOOP_ENVIRONMENT: test
+      BETTER_AUTH_SECRET: ci-only-secret-with-more-than-thirty-two-characters
+      BETTER_AUTH_URL: http://localhost:3000
+      PUBLIC_APP_URL: http://localhost:3000
+      DATABASE_POOL_MAX: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run db:migrate
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run test:e2e
+      - run: npm run build
+      - run: npm audit
