@@ -36,7 +36,7 @@ Mission browser saves also switch by linked learner. A unit regression test veri
 
 ## Hosted-service evidence
 
-The connected Vercel account had no BuildLoop project for the repository. A dedicated Next.js project shell was created and verified with Node 22.x; it has no Git connection, deployment, or domain yet. The connected Supabase account has three unrelated projects and no dedicated BuildLoop database. No managed database migration, public domain, Resend delivery, Sentry event, database backup, or restore drill has been verified. The launch checklist keeps these items open until the corresponding external resource is configured and tested.
+The connected Vercel account had no BuildLoop project for the repository. A dedicated Next.js project shell was created and verified with Node 22.x; it has no Git connection, deployment, or domain yet. The connected Supabase account has three unrelated projects and no dedicated BuildLoop database. GitHub API inspection confirmed `master` currently has no protection rule and no Actions workflow on the default branch; the local CI workflow has not been pushed. No managed database migration, public domain, Resend delivery, Sentry event, database backup, or restore drill has been verified. The launch checklist keeps these items open until the corresponding external resource is configured and tested.
 
 ## Local commits
 
