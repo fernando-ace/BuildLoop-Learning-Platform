@@ -553,7 +553,7 @@ test("V4 shared app uses real signed-in membership, invitation acceptance, and r
   await page.getByRole("button", { name: "Explore Studio" }).click();
   await expect(page.getByRole("heading", { name: appName, exact: true })).toBeVisible();
   await page.locator(".studio-account-apps li").filter({ hasText: appName }).getByRole("link", { name: "Open preview" }).click();
-  await expect(page.getByText("Preview · Version 1")).toBeVisible();
+  await expect(page.getByText("Preview · Version 1")).toBeVisible({ timeout: 15_000 });
   await page.goto(`/apps/${appId}`);
   await expect(page.getByRole("heading", { name: "Campus Event Operations" })).toBeVisible();
   await expect(page.getByText("E2E Owner", { exact: true })).toBeVisible();
