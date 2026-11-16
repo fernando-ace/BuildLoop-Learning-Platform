@@ -1,6 +1,6 @@
 # Operations runbook
 
-This runbook covers production database recovery and release diagnosis for BuildLoop. Provider-specific backup configuration and a completed restore drill are external launch requirements; this document does not claim that backups are enabled.
+This runbook covers production database recovery and release diagnosis for BuildLoop. Production provider-backup configuration and a full isolated backup restore drill remain external launch requirements; the synthetic Neon Free PITR check below does not mean backups are enabled.
 
 ## Current Neon Free Preview limits
 

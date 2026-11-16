@@ -25,8 +25,8 @@
 - [ ] Invitation email is delivered and resend behavior is verified.
 - [ ] Verify migration `0004_shared_operation_rate_limits` and Builder/auth throttles across multiple hosted instances. Preview DB migration and local integration coverage are recorded; hosted multi-instance and Production verification are not.
 - [ ] External error monitoring is configured and a safe test event is verified.
-- [ ] Run and record an isolated database restore drill using [the operations runbook](docs/OPERATIONS_RUNBOOK.md); verify provider retention/PITR settings and operator-approved recovery objectives.
-- [ ] Verify the Neon Preview project's live history setting and complete the no-cost synthetic point-in-time branch check; no snapshot or in-place restore may be used for this drill.
+- [ ] Run a full isolated provider-backup restore drill and agree RPO/RTO with the operator. The synthetic Free-tier PITR branch check passed, but does not verify scheduled backups or restore from a provider backup.
+- [x] Verified the Neon Preview project is Free with six-hour history and completed the no-cost synthetic point-in-time branch check. The child branch and probe table were removed; no snapshot or in-place restore was used.
 
 ## Requires operator or provider access
 
@@ -42,4 +42,4 @@
 - [ ] Create/configure a Sentry project, set `SENTRY_DSN` and `NEXT_PUBLIC_SENTRY_DSN`, configure Vercel log retention/alerts, and verify a safe test event.
 - [ ] Run preview and production smoke tests with real accounts, persistence, invitations, app publishing, and rollback; record deployment SHA and URL.
 
-Vercel hosting and Neon Preview infrastructure are configured, but there is no hosted deployment, Production database/domain, verified email delivery, verified monitoring event, backup activation, or restore drill. Do not mark the service production operational until the deployment and required operational checks have succeeded.
+Vercel hosting and Neon Preview infrastructure are configured, but there is no hosted deployment, Production database/domain, verified email delivery, verified monitoring event, or Production backup activation/full provider-backup restore drill. The synthetic Free PITR branch check is documented but is not a Production recovery policy. Do not mark the service production operational until the deployment and required operational checks have succeeded.

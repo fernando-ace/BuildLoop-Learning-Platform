@@ -56,13 +56,7 @@ The GitHub Actions workflow runs a clean install, checks the migration journal a
 
 The existing Vercel project is `buildloop-learning-platform` (`prj_0WDtrIFOTYSHxeYHqfC4RPEIQCPl`) in the Hobby team. Its Git integration is connected to `fernando-ace/BuildLoop-Learning-Platform`, with `master` as the Production branch. SSO protection is enabled for non-custom-domain deployments, there are no domains, and the ignored-build command allows builds only when `VERCEL_ENV=preview`. The existing Neon Free `buildloop-staging` database is configured for Preview and has been migrated; no Production database or Production variables are configured.
 
-**Current deployment gate:** this Vercel project has zero deployments. Vercel CLI 65.16.0 rejects `vercel deploy --environment preview` and the deprecated `--target=preview` alias with `first_deployment_production`; it says the first deployment must be Production. Do not run the suggested `--prod` command, promote a deployment, add a domain, or push a branch to trigger a deployment as a workaround. A prior feature-branch Git deployment was classified as Production and assigned an alias before its ignored-build step canceled it. See [Goal 14 evidence](docs/GOAL14_EVIDENCE.md).
-
-When Vercel provides a Preview-only path for this zero-deployment project, use the explicit Preview target and stop if the CLI reports Production or `first_deployment_production`:
-
-```sh
-vercel deploy --environment preview --no-wait --yes
-```
+**Current deployment gate:** this Vercel project has zero deployments. Vercel CLI 65.16.0 rejected both `vercel deploy --environment preview --no-wait --yes` and `vercel deploy --target=preview` with `first_deployment_production`. Current [Vercel CLI deployment guidance](https://vercel.com/docs/projects/deploy-from-cli) and [environment documentation](https://vercel.com/docs/deployments/environments) confirm that the first deployment is always Production, including when `--target=preview` is supplied. Deleted deployments do not count, and this project has none. A prior feature-branch Git deployment was classified as Production and assigned an alias before its ignored-build step canceled it; that deployment was deleted. Do not run the suggested `--prod` command, promote a deployment, add a domain, or push a branch to trigger a deployment as a workaround. The Preview CLI command becomes a supported Preview path only after a first deployment record exists, which cannot be created under this goal's no-Production constraint. See [Goal 14 evidence](docs/GOAL14_EVIDENCE.md).
 
 Before proceeding past build, inspect deployment metadata and confirm the target is Preview. Keep SSO protection enabled. After a Preview deployment succeeds, verify `/api/health/live`, `/api/health/ready`, authentication, database persistence, generated-app preview, and controlled publish/rollback. Record its URL, commit SHA, migration set, smoke-test results, and operator. Do not claim a hosted test passed without executing it against the protected deployment.
 
@@ -82,4 +76,4 @@ Use expand/migrate/contract for schema changes that overlap deployments: first a
 
 Vercel deployment rollback restores application code/traffic. BuildLoop's in-product app-version rollback is a separate operation over a learner's published artifact and data. Neither should be used as a substitute for the other.
 
-See [the operations runbook](docs/OPERATIONS_RUNBOOK.md) for backup configuration expectations, an isolated restore drill, and incident recovery steps. Backup activation and a successful provider restore remain launch gates.
+See [the operations runbook](docs/OPERATIONS_RUNBOOK.md) for backup configuration expectations, the completed synthetic Free PITR branch check, the still-required isolated provider-backup restore drill, and incident recovery steps. Backup activation and a successful provider restore remain launch gates.
