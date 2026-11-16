@@ -5,7 +5,7 @@
 Vercel runs the Next.js Node.js application. Managed PostgreSQL stores users, Better Auth sessions, memberships, invitations, app versions, preview/production records, publication history, and audit events. There is no production filesystem state. The old SQLite shared-app store is retained only as a legacy import source.
 
 - `GET /api/health/live`: process can serve a request; no dependency query.
-- `GET /api/health/ready`: performs bounded PostgreSQL checks, verifies the migration journal reaches the checked-in head, and in Preview/Production checks required auth, email, Builder, and monitoring configuration. It returns 503 if any required check fails.
+- `GET /api/health/ready`: performs bounded PostgreSQL checks and verifies the migration journal reaches the checked-in head. Preview requires database, migration, and authentication readiness; Production additionally requires email, Builder, and monitoring configuration. It returns 503 if an environment-required check fails.
 - `GET /api/health`: compatibility alias for liveness.
 
 Responses contain status, timestamp, environment, release, and app version; readiness adds dependency/configuration check statuses only. Hosted integration checks verify configuration shape/presence, not provider delivery. Responses do not return exception details or connection configuration. Health requests emit structured JSON logs with a request ID and duration.
@@ -13,7 +13,7 @@ Responses contain status, timestamp, environment, release, and app version; read
 ## Troubleshooting
 
 1. Check the deployment's Vercel runtime logs and identify its release SHA.
-2. Request liveness, then readiness. A live but not-ready instance usually indicates missing/invalid database configuration, database unavailability or exhausted connections, a migration journal behind the deployed code, or missing hosted auth/email/Builder/monitoring configuration. Use the named check statuses to identify the failing gate.
+2. Request liveness, then readiness. A live but not-ready instance usually indicates missing/invalid database configuration, database unavailability or exhausted connections, a migration journal behind the deployed code, or missing authentication configuration. In Production, missing email, Builder, or monitoring configuration also blocks readiness. Use the named check statuses to identify the failing gate.
 3. Confirm the environment variables are scoped to the same Vercel environment as the deployment. Never paste secret values into tickets or logs.
 4. Check the managed database's connection count, TLS status, service health, and migration journal.
 5. For authentication issues, confirm `BETTER_AUTH_URL`, `PUBLIC_APP_URL`, HTTPS, and the deployment's allowed origin. Reset a user's password through the supported account flow; do not edit password hashes directly.

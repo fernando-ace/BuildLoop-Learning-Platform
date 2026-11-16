@@ -8,7 +8,7 @@
 - [x] Production migration command rejects localhost.
 - [x] Production migration command requires TLS-enforcing `sslmode=require`, `verify-ca`, or `verify-full`; it rejects plaintext-fallback modes.
 - [x] Production application database startup uses the same TLS and loopback validation before creating a connection pool.
-- [x] Liveness and readiness endpoints expose redacted release metadata; hosted readiness checks PostgreSQL, applied migrations through the checked-in journal head, and required authentication, email, Builder, and monitoring configuration without returning secret values.
+- [x] Liveness and readiness endpoints expose redacted release metadata; Preview readiness checks PostgreSQL, current migrations, and authentication, while Production additionally requires email, Builder, and monitoring configuration. Responses do not return secret values.
 - [x] Sentry server/client integration and development-only verification endpoint are implemented with learner-content scrubbing.
 - [x] The Sentry runtime-injection package is kept external from the Next.js server bundle; the local production server starts without the prior hook-resolution warning.
 - [x] CI workflow runs against a disposable PostgreSQL 17 service.
@@ -20,18 +20,19 @@
 - [x] Generated app execution remains declarative and constrained.
 - [x] Six Missions' checkpoints and attempt/skill progress persist per authenticated learner, migrate a local save when no account record exists, and use revision checks for multi-device writes.
 - [x] Studio coaching, reflection, observation, and version-learning records are per learner/app, revision-checked, private to their author, and synchronized with browser-save conflict choices.
-- [ ] Apply migrations and verify signed-in Missions and Studio resume across two browsers against a managed PostgreSQL environment.
+- [ ] Verify signed-in Missions and Studio resume across two browsers against a hosted Preview deployment; none exists yet.
 - [ ] Invitation email is delivered and resend behavior is verified.
-- [ ] Apply migration `0004_shared_operation_rate_limits` in Preview and Production and verify Builder/auth throttles across multiple instances.
+- [ ] Verify migration `0004_shared_operation_rate_limits` and Builder/auth throttles across multiple hosted instances. Preview DB migration and local integration coverage are recorded; hosted multi-instance and Production verification are not.
 - [ ] External error monitoring is configured and a safe test event is verified.
 - [ ] Run and record an isolated database restore drill using [the operations runbook](docs/OPERATIONS_RUNBOOK.md); verify provider retention/PITR settings and operator-approved recovery objectives.
 
 ## Requires operator or provider access
 
-- [x] Create a dedicated Vercel Next.js project shell and set its Node runtime to 22.x; no Git connection or deployment was started.
-- [ ] Connect `fernando-ace/BuildLoop-Learning-Platform` to the Vercel project after Preview/Production databases and environment settings are ready.
-- [ ] Provision dedicated managed PostgreSQL databases for Preview and Production; use TLS, pooled app connections, and a separate migration connection when provider guidance requires it.
-- [ ] Configure Vercel Preview and Production variables: `DATABASE_URL`, `DATABASE_POOL_MAX`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `PUBLIC_APP_URL`, `BUILDLOOP_ENVIRONMENT`, `RESEND_API_KEY`, `EMAIL_FROM`, `OPENAI_API_KEY`, `SENTRY_DSN`, and `NEXT_PUBLIC_SENTRY_DSN`.
+- [x] Create the Vercel Next.js project, set Node 22.x, and connect `fernando-ace/BuildLoop-Learning-Platform`; `master` is the Production branch and SSO protection is enabled for non-custom-domain deployments.
+- [x] Provision the dedicated Neon Free `buildloop-staging` Preview database, configure Preview-only database variables, apply migrations, and run the Neon-backed test suite. No Production database was provisioned.
+- [ ] Complete a protected hosted Preview deployment. The project currently has zero deployments; Vercel CLI refuses the first explicit Preview deployment with `first_deployment_production`. Do not use `--prod` or trigger a Git deployment as a workaround; see [deployment instructions](DEPLOYMENT.md) and [evidence](docs/GOAL14_EVIDENCE.md).
+- [ ] Configure optional Preview-only email, Builder, and monitoring integrations if exercising those provider workflows; they are not Preview readiness gates. Verify each integration before claiming it works.
+- [ ] Configure Production variables and database only as part of a separately authorized Production activation; this goal's current deployment gate does not permit a Production deployment.
 - [ ] Configure GitHub branch protection to require `BuildLoop CI quality` before merging to `master` (after the workflow is available on the default branch) and configure Vercel production promotion rules.
 - [ ] Choose production origin, add it to hosting, and configure DNS/TLS after domain ownership is confirmed.
 - [ ] Enable managed database automated backups (7-day retention minimum) and PITR if available; follow [the operations runbook](docs/OPERATIONS_RUNBOOK.md).
@@ -39,4 +40,4 @@
 - [ ] Create/configure a Sentry project, set `SENTRY_DSN` and `NEXT_PUBLIC_SENTRY_DSN`, configure Vercel log retention/alerts, and verify a safe test event.
 - [ ] Run preview and production smoke tests with real accounts, persistence, invitations, app publishing, and rollback; record deployment SHA and URL.
 
-No external hosting, managed database, production domain, mail provider, or monitoring integration is currently verified. Do not mark the service production operational until the deployment and smoke tests have succeeded.
+Vercel hosting and Neon Preview infrastructure are configured, but there is no hosted deployment, Production database/domain, verified email delivery, verified monitoring event, backup activation, or restore drill. Do not mark the service production operational until the deployment and required operational checks have succeeded.

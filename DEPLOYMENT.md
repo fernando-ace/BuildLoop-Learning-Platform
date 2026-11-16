@@ -21,13 +21,13 @@ Configure variables independently for local development, Vercel Preview, and Ver
 | `BUILDLOOP_RELEASE` | Optional release label; commit SHA falls back to Vercel/Git metadata | Optional |
 | `NEXT_PUBLIC_BUILDLOOP_ENVIRONMENT` | Public environment label attached to client error events | Optional |
 | `NEXT_PUBLIC_BUILDLOOP_RELEASE` | Public release label attached to client error events | Optional |
-| `OPENAI_API_KEY` | Server-only key for live Builder generation | Required for hosted Builder and readiness |
+| `OPENAI_API_KEY` | Server-only key for live Builder generation | Required for live Builder; Production readiness |
 | `BUILDLOOP_OPENAI_MODEL` | Server-only model selector | Optional |
 | `BUILDLOOP_BUILDER_MODE` | Deterministic fixture generation; accepted only in development and test, never Preview or Production | Development/test only |
-| `RESEND_API_KEY` | Server-only invitation, verification, and password-reset mail key | Required for hosted readiness and account email |
-| `EMAIL_FROM` | Verified sender address for invitation, verification, and password-reset email | Required for hosted readiness and account email |
-| `SENTRY_DSN` | Server/edge event destination | Required for hosted readiness; delivery must be verified separately |
-| `NEXT_PUBLIC_SENTRY_DSN` | Browser event destination; public project DSN, never an auth token | Required for hosted readiness; delivery must be verified separately |
+| `RESEND_API_KEY` | Server-only invitation, verification, and password-reset mail key | Required for email delivery and Production readiness; optional in Preview |
+| `EMAIL_FROM` | Verified sender address for invitation, verification, and password-reset email | Required for email delivery and Production readiness; optional in Preview |
+| `SENTRY_DSN` | Server/edge event destination | Required for Production readiness; optional in Preview; delivery must be verified separately |
+| `NEXT_PUBLIC_SENTRY_DSN` | Browser event destination; public project DSN, never an auth token | Required for Production readiness; optional in Preview; delivery must be verified separately |
 | `BUILDLOOP_ALLOW_REMOTE_MIGRATIONS` | Explicit one-command approval for a remote migration | Release command only; value `1` |
 | `BUILDLOOP_ALLOW_PRODUCTION_MIGRATIONS` | Second explicit one-command gate for Production migration | Production migration command only; value `1` |
 | `BUILDLOOP_AUTH_MODE` | Enables signed local browser-test identities | Development/test only; never hosted |
@@ -37,7 +37,7 @@ Configure variables independently for local development, Vercel Preview, and Ver
 
 Never use `NEXT_PUBLIC_` for secrets. Vercel's built-in environment values provide deployment metadata; application code reports the environment and release through `/api/health`.
 
-`/api/health/ready` returns 503 in Preview/Production unless PostgreSQL is reachable, the applied migration journal reaches the latest checked-in migration, and Better Auth, account email, Builder, and both Sentry DSNs are configured. Its hosted integration checks validate configuration presence and origin shape, not provider connectivity or successful delivery; verify email and monitoring with their safe end-to-end checks before launch. Development and test environments do not require those hosted integrations.
+`/api/health/ready` requires reachable PostgreSQL, a current migration journal, and valid Better Auth configuration in Preview. Production readiness additionally requires account email, Builder, and both Sentry DSNs. The endpoint reports configuration presence and shape, not provider connectivity or successful delivery; verify email and monitoring with their safe end-to-end checks before launch. Development and test environments do not require hosted integrations.
 
 `BUILDLOOP_SHARED_DB_PATH` belongs to a legacy SQLite repository module with no current production route callers; production app and learner records use PostgreSQL. Do not set it for hosted deployments. The local SQLite import command has its own explicit `--source` argument.
 
@@ -52,20 +52,27 @@ Never use `NEXT_PUBLIC_` for secrets. Vercel's built-in environment values provi
 
 ## Preview and production release
 
-1. Open a pull request. GitHub Actions runs a clean install, validates the Drizzle migration journal, applies migrations to disposable PostgreSQL 17, checks PR diff whitespace, then runs typecheck, lint, unit and PostgreSQL integration tests, Playwright browser tests, the production build, and dependency audit.
-2. Configure Vercel's Git integration for this repository and separate Preview and Production variables. Preview needs its own persistent disposable database if the full platform is to be exercised.
-3. Require the CI workflow before merging to `master`; configure this branch protection in GitHub. Vercel can create Preview builds for pull requests after the project is connected.
-4. Before promotion, review committed SQL and run the migration command against the intended environment. Production requires an explicit opt-in:
+The GitHub Actions workflow runs a clean install, checks the migration journal and PR diff, applies migrations to disposable PostgreSQL 17, and runs typecheck, lint, unit/integration/browser tests, a production build, and dependency audit. The workflow is on this feature branch; it has not yet run from the remote default branch, and branch protection has not been verified.
+
+The existing Vercel project is `buildloop-learning-platform` (`prj_0WDtrIFOTYSHxeYHqfC4RPEIQCPl`) in the Hobby team. Its Git integration is connected to `fernando-ace/BuildLoop-Learning-Platform`, with `master` as the Production branch. SSO protection is enabled for non-custom-domain deployments, there are no domains, and the ignored-build command allows builds only when `VERCEL_ENV=preview`. The existing Neon Free `buildloop-staging` database is configured for Preview and has been migrated; no Production database or Production variables are configured.
+
+**Current deployment gate:** this Vercel project has zero deployments. Vercel CLI 65.16.0 rejects `vercel deploy --environment preview` and the deprecated `--target=preview` alias with `first_deployment_production`; it says the first deployment must be Production. Do not run the suggested `--prod` command, promote a deployment, add a domain, or push a branch to trigger a deployment as a workaround. A prior feature-branch Git deployment was classified as Production and assigned an alias before its ignored-build step canceled it. See [Goal 14 evidence](docs/GOAL14_EVIDENCE.md).
+
+When Vercel provides a Preview-only path for this zero-deployment project, use the explicit Preview target and stop if the CLI reports Production or `first_deployment_production`:
+
+```sh
+vercel deploy --environment preview --no-wait --yes
+```
+
+Before proceeding past build, inspect deployment metadata and confirm the target is Preview. Keep SSO protection enabled. After a Preview deployment succeeds, verify `/api/health/live`, `/api/health/ready`, authentication, database persistence, generated-app preview, and controlled publish/rollback. Record its URL, commit SHA, migration set, smoke-test results, and operator. Do not claim a hosted test passed without executing it against the protected deployment.
+
+For any separately authorized future Production release, review committed SQL and run migrations only against the intended Production database with both explicit gates:
 
    ```sh
    BUILDLOOP_ENVIRONMENT=production BUILDLOOP_ALLOW_REMOTE_MIGRATIONS=1 BUILDLOOP_ALLOW_PRODUCTION_MIGRATIONS=1 npm run db:migrate
    ```
 
-   The production URL must not point to localhost and must include `sslmode=require` or stronger. All remote databases require an explicit migration opt-in. The command applies committed forward migrations only; it never resets or seeds application data.
-5. Promote the tested Vercel deployment. Verify `/api/health/live`, `/api/health/ready`, authentication, database persistence, generated app preview, and a controlled publish/rollback before inviting users.
-6. Record the deployment URL, commit SHA, migration set, smoke-test results, and operator in the release record.
-
-Vercel project `buildloop-learning-platform` (`prj_0WDtrIFOTYSHxeYHqfC4RPEIQCPl`) now exists in the connected team with Node 22.x selected. Git connection was intentionally skipped, and the project has no deployment or domain yet. Connect `fernando-ace/BuildLoop-Learning-Platform` after Preview/Production databases and runtime variables are ready. Configure `DATABASE_POOL_MAX` against the provider's connection budget; the default ceiling is five connections per warm instance, so total demand scales with instance count.
+The Production URL must not point to localhost and must include `sslmode=require` or stronger. All remote databases require an explicit migration opt-in. The command applies committed forward migrations only; it never resets or seeds application data. This migration procedure does not authorize a Production deployment. Configure `DATABASE_POOL_MAX` against the provider's connection budget; the default ceiling is five connections per warm instance, so total demand scales with instance count.
 
 ## Migration and rollback rules
 
