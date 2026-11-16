@@ -60,4 +60,12 @@ The continuation adds `DATABASE_MIGRATION_URL` support and prefers Neon `DATABAS
 - `576f8fc` — private per-learner Studio persistence
 - `8c27a86` — shared auth and Builder rate limits
 - `27b878f` — PostgreSQL rate-limit concurrency test
+`r`n### Preview CLI route re-check (2026-11-15)
 
+Read the current official Vercel CLI, environments, and project-settings documentation. Vercel documents that a new project's first deployment is Production, even without `--prod`; it also says a later deployment can target Preview after a failed first deployment. The installed Vercel CLI 65.16.0 accepts `--environment preview`; `--target=preview` remains accepted as a deprecated alias that maps to `--environment`.
+
+Verified the CLI identity and project from the Goal 14 worktree: account `fernando-ace`, Hobby team `team_FxCiuzlr4hc0v3bitW4dWkVg`, project `buildloop-learning-platform` (`prj_0WDtrIFOTYSHxeYHqfC4RPEIQCPl`), repo `BuildLoop-Learning-Platform`, production branch `master`. The project API reported `live=false`, zero deployments, SSO protection `all_except_custom_domains`, and the Preview-only ignored-build command `if [ "$VERCEL_ENV" = "preview" ]; then exit 1; else exit 0; fi`. `vercel deploy --target=preview --dry` confirmed the alias mapping and inspected local files without upload or deployment creation.
+
+Attempted both supported explicit Preview spellings from this worktree: `vercel deploy --environment preview --no-wait --yes` and `vercel deploy --target=preview --no-wait --yes`. Both stopped before upload/build with CLI reason `first_deployment_production`: Vercel reports the project has no deployments and requires the first deployment to be Production; its only suggested retry is `--prod`. The preview-only request was not reclassified as Production, and no Production command was run. The post-attempt API read still reports zero deployments, `live=false`, and SSO protection enabled. CLI help says `--skip-domain` is only available for Production, so it was not used; no domain assignment was requested.
+
+This exhausts the current CLI's explicit Preview route without crossing the no-Production boundary. No hosted Preview URL exists, so hosted/browser/auth/database validation remains unperformed. The next external prerequisite is for Vercel to allow a Preview deployment on this zero-deployment project without creating a Production deployment; the CLI offers only the prohibited Production action. Cost remained $0; no paid services, upgrades, or additional infrastructure were created.
