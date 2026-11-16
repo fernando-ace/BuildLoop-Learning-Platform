@@ -10,7 +10,7 @@ The six-hour window is the maximum plan capability, not proof that a particular 
 
 ### No-cost synthetic Preview recovery check
 
-The procedure below remains incomplete. On 2026-11-16 a synthetic marker was inserted and deleted at 2026-11-16 07:41 UTC. The point-in-time branch creation was not submitted because browser control stopped returning page data while the Neon Create branch dialog was open. The marker row was confirmed absent, and the empty temporary probe table was dropped. No branch or snapshot was created, and no recovery result can be claimed. To resume, confirm the project still meets Free-tier limits and create a temporary child branch at the recorded point-in-time. Do not create a snapshot.
+This procedure was completed once on 2026-11-16 against the verified Free project. A synthetic marker inserted on `main` at 07:50:50 UTC was recovered exactly once on a temporary child branch created at 07:50:56 UTC. The branch was set to auto-delete after one hour and manually deleted after verification; the Console returned to one branch. The temporary probe table was dropped from `main` and verified absent. No snapshot or in-place restore was used. This confirms one synthetic point-in-time branch recovery within the observed six-hour history setting; it does not establish automated backups, RPO/RTO, or Production recoverability.
 
 1. Record the project and root-branch identifiers privately; never record connection values.
 2. Create a temporary table with a unique Goal 14 marker in the Preview root branch, insert one synthetic row, and record the database timestamp in UTC.
