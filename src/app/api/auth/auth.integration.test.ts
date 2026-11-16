@@ -1,10 +1,17 @@
 import { randomUUID } from "node:crypto";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, describe, expect, it } from "vitest";
 import { POST } from "./[...all]/route";
 import { getPlatformIdentity } from "@/lib/platform/session";
-import { closePlatformDatabase } from "@/lib/platform/database";
+import { closePlatformDatabase, getPlatformPool } from "@/lib/platform/database";
 
 const enabled = Boolean(process.env.DATABASE_URL);
+const testEmails: string[] = [];
+
+afterEach(async () => {
+  for (const email of testEmails.splice(0)) {
+    await getPlatformPool().query("DELETE FROM platform_users WHERE email=$1", [email]);
+  }
+});
 
 function request(path: string, method: string, body?: unknown, cookie?: string) {
   return new Request(`http://localhost:3000/api/auth/${path}`, {
@@ -19,6 +26,7 @@ describe.skipIf(!enabled)("Better Auth PostgreSQL session", () => {
 
   it("creates a real account, resolves its stable identity from a session cookie, and invalidates logout", async () => {
     const email = `auth-${randomUUID()}@example.test`;
+    testEmails.push(email);
     const signUp = await POST(request("sign-up/email", "POST", { name: "Browser User", email, password: "A-real-test-password-394!" }));
     expect(signUp.status).toBe(200);
     const cookie = signUp.headers.getSetCookie().map((value) => value.split(";")[0]).join("; ");
