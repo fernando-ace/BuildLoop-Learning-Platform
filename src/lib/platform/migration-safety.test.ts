@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { validateMigrationTarget, validateProductionDatabaseUrl } from "./migration-safety";
+import { getMigrationDatabaseUrl, validateMigrationTarget, validateProductionDatabaseUrl } from "./migration-safety";
 
 const remoteProduction = {
   databaseUrl: "postgresql://operator:secret@db.example.test:5432/buildloop?sslmode=require",
@@ -10,6 +10,14 @@ const remoteProduction = {
 };
 
 describe("migration target safety", () => {
+  it("prefers an explicitly supplied migration URL, then Neon unpooled URLs, then runtime URL", () => {
+    expect(getMigrationDatabaseUrl({ DATABASE_MIGRATION_URL: "direct-explicit", DATABASE_URL_UNPOOLED: "direct-neon", DATABASE_URL: "pooled" })).toBe("direct-explicit");
+    expect(getMigrationDatabaseUrl({ DATABASE_MIGRATION_URL: "", DATABASE_URL_UNPOOLED: "direct-neon", DATABASE_URL: "pooled" })).toBe("direct-neon");
+    expect(getMigrationDatabaseUrl({ DATABASE_URL_UNPOOLED: "", POSTGRES_URL_NON_POOLING: "direct-non-pooling", DATABASE_URL: "pooled" })).toBe("direct-non-pooling");
+    expect(getMigrationDatabaseUrl({ DATABASE_URL: "pooled" })).toBe("pooled");
+    expect(getMigrationDatabaseUrl({})).toBeUndefined();
+  });
+
   it("allows local development migration targets without production opt-ins", () => {
     expect(validateMigrationTarget({ databaseUrl: "postgresql://localhost:5432/buildloop", environment: "development" }).hostname).toBe("localhost");
   });

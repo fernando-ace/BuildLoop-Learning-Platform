@@ -6,6 +6,10 @@ export interface MigrationTargetOptions {
   allowProductionMigrations?: string;
 }
 
+export function getMigrationDatabaseUrl(environment: Partial<NodeJS.ProcessEnv>) {
+  return environment.DATABASE_MIGRATION_URL || environment.DATABASE_URL_UNPOOLED || environment.POSTGRES_URL_NON_POOLING || environment.DATABASE_URL || undefined;
+}
+
 function parsePostgresUrl(databaseUrl: string) {
   let target: URL;
   try {

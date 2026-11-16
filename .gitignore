@@ -7,3 +7,5 @@ playwright-report/
 qa-*.png
 .DS_Store
 *.tsbuildinfo
+.vercel
+.env*

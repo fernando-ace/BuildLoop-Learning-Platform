@@ -12,16 +12,16 @@ Goal 14 branch: `goal-14-production-readiness`
 
 ## Database setup
 
-Create a new `buildloop-staging` Neon Free project in US East (N. Virginia), isolated from every other application. The signed-in Neon organization may require provisioning through the Neon Postgres integration in Vercel. Select only the permanently free plan; stop if the flow requests payment, a paid tier, or a paid trial. Use the pooled Neon connection string for Preview `DATABASE_URL` and the direct connection string for `DATABASE_MIGRATION_URL` when running Drizzle migrations. Both values are secrets; never add them to Git, logs, shell history, or evidence.
+Create a new `buildloop-staging` Neon Free project in US East (N. Virginia), isolated from every other application. The Vercel integration provides pooled `DATABASE_URL` and direct `DATABASE_URL_UNPOOLED`/`POSTGRES_URL_NON_POOLING` variables. Select only the permanently free plan; stop if the flow requests payment, a paid tier, or a paid trial. Drizzle migrations prefer explicit `DATABASE_MIGRATION_URL`, then the provider's direct/unpooled variable, then pooled `DATABASE_URL`. Never add connection values to Git, logs, shell history, or evidence.
 
-Runtime PostgreSQL uses `pg` with a small bounded pool, short connection/statement timeouts, and TLS enforced in Production. Keep Preview and Production databases separate. For a remote staging migration, set `BUILDLOOP_ENVIRONMENT=preview`, `VERCEL_ENV=preview`, and `BUILDLOOP_ALLOW_REMOTE_MIGRATIONS=1`, then run `npm run db:migrate` with the direct URL. Confirm the target host and journal after applying migrations. The migration command refuses remote targets without explicit opt-in and refuses production without a second explicit opt-in.
+Runtime PostgreSQL uses `pg` with a small bounded pool, short connection/statement timeouts, and TLS enforced in Production. Keep Preview and Production databases separate. For a remote staging migration, set `BUILDLOOP_ENVIRONMENT=preview`, `VERCEL_ENV=preview`, and `BUILDLOOP_ALLOW_REMOTE_MIGRATIONS=1`, then run `npm run db:migrate`; it selects the direct Neon URL automatically. Confirm the target host and journal after applying migrations. The migration command refuses remote targets without explicit opt-in and refuses production without a second explicit opt-in.
 
 ## Preview environment
 
 Configure only the Vercel Preview environment:
 
 - `DATABASE_URL`: Neon pooled URL with TLS.
-- `DATABASE_MIGRATION_URL`: Neon direct URL with TLS, used only for controlled migration runs.
+- `DATABASE_URL_UNPOOLED` or `POSTGRES_URL_NON_POOLING`: Neon direct URL with TLS, selected automatically for controlled migration runs. `DATABASE_MIGRATION_URL` can override it when needed.
 - `BETTER_AUTH_SECRET`: unique random secret of at least 32 characters.
 - `VERCEL_ENV=preview` is supplied by Vercel; do not override it inconsistently.
 - `BUILDLOOP_PREVIEW_ALLOW_UNVERIFIED_SIGNUPS=1` only when Vercel Authentication is enabled for every deployment URL. It allows password signup without email verification inside SSO-protected staging. It does not fake invitation or password-reset delivery.
