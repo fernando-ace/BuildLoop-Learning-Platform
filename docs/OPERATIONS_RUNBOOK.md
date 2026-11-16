@@ -4,13 +4,13 @@ This runbook covers production database recovery and release diagnosis for Build
 
 ## Current Neon Free Preview limits
 
-Neon's current plan documentation lists the Free plan at $0/month with a maximum six-hour instant-restore history window capped at 1 GB of changes, one manual snapshot, and no scheduled backup schedules. Snapshot storage is listed at $0.09/GB-month. Do not create a manual snapshot under Goal 14's $0 limit. Confirm the connected project's actual history-window setting and remaining Free quotas in the Neon Console before any recovery operation; these live settings were not verified from this checkout. Free has no uptime SLA. See [Neon plans](https://neon.com/docs/introduction/plans) and [history window](https://neon.com/docs/postgres/backup-restore/history-window).
+Neon's current plan documentation lists the Free plan at $0/month with a maximum six-hour instant-restore history window capped at 1 GB of changes, one manual snapshot, and no scheduled backup schedules. Snapshot storage is listed at $0.09/GB-month. Do not create a manual snapshot under Goal 14's $0 limit. On 2026-11-16 the signed-in Console showed `buildloop-staging` on Free, a six-hour history setting, one branch, and about 33.23 MB storage; the local database connection was confirmed to target the same project. Recheck live settings before a recovery operation. Free has no uptime SLA. See [Neon plans](https://neon.com/docs/introduction/plans) and [history window](https://neon.com/docs/postgres/backup-restore/history-window).
 
 The six-hour window is the maximum plan capability, not proof that a particular recovery point is available. Point-in-time restore applies to root branches and overwrites every database and all schema on the branch, temporarily interrupting its connections; Neon keeps a pre-restore branch for rollback. Never use an in-place root restore for a staging drill. A verified RPO/RTO is not established for the current Preview database, and Free does not meet the production seven-day retention gate.
 
 ### No-cost synthetic Preview recovery check
 
-This procedure has not yet been executed. Run it only after confirming the project is still Free, the history window is enabled, at least one branch slot is free, and the test can complete within the retained history. Do not create a snapshot.
+The procedure below remains incomplete. On 2026-11-16 a synthetic marker was inserted and deleted at 2026-11-16 07:41 UTC. The point-in-time branch creation was not submitted because browser control stopped returning page data while the Neon Create branch dialog was open. The marker row was confirmed absent, and the empty temporary probe table was dropped. No branch or snapshot was created, and no recovery result can be claimed. To resume, confirm the project still meets Free-tier limits and create a temporary child branch at the recorded point-in-time. Do not create a snapshot.
 
 1. Record the project and root-branch identifiers privately; never record connection values.
 2. Create a temporary table with a unique Goal 14 marker in the Preview root branch, insert one synthetic row, and record the database timestamp in UTC.
