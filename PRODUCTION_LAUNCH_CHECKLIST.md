@@ -21,7 +21,7 @@
 - [x] Six Missions' checkpoints and attempt/skill progress persist per authenticated learner, migrate a local save when no account record exists, and use revision checks for multi-device writes.
 - [x] Studio coaching, reflection, observation, and version-learning records are per learner/app, revision-checked, private to their author, and synchronized with browser-save conflict choices.
 - [x] Verified `buildloop-staging` is Free with a 6-hour history setting; synthetic point-in-time marker recovered once on an isolated branch, then the temporary branch and probe table were removed. No snapshot or root restore used. This does not meet the Production automated backup and seven-day retention gate.
-- [ ] Verify signed-in Missions and Studio resume across two browsers against a hosted Preview deployment; none exists yet.
+- [ ] Verify signed-in Missions and Studio resume across two browsers against a hosted Preview deployment. Local separately signed-in browser-context persistence now passes; no hosted Preview exists yet.
 - [ ] Invitation email is delivered and resend behavior is verified.
 - [ ] Verify migration `0004_shared_operation_rate_limits` and Builder/auth throttles across multiple hosted instances. Preview DB migration and local integration coverage are recorded; hosted multi-instance and Production verification are not.
 - [ ] External error monitoring is configured and a safe test event is verified.

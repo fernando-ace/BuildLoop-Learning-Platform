@@ -577,3 +577,74 @@ test("V4 shared app uses real signed-in membership, invitation acceptance, and r
   }
   expect(errors).toEqual([]);
 });
+
+test("Mission and Studio records resume in a separately signed-in browser context", async ({ page, browser }, testInfo) => {
+  const origin = "http://127.0.0.1:3107";
+  const ownerId = e2eUserId("owner", testInfo);
+  const missionProgress = {
+    activeMission: 4,
+    mission1State: { completed: true }, mission1Progress: { attempts: [] },
+    mission2State: {}, mission2Progress: { attempts: [] }, mission2AttemptCount: 0,
+    mission3State: {}, mission3Progress: { attempts: [] },
+    mission4State: { checkpoint: "saved on browser one" }, mission4Progress: { attempts: [{ result: "passed" }] },
+    mission5State: {}, mission5Progress: { attempts: [] },
+    mission6State: {}, mission6Progress: { attempts: [] },
+  };
+  const missionWrite = await page.request.put("/api/learner/progress", {
+    headers: { origin },
+    data: { expectedRevision: null, progress: missionProgress },
+  });
+  expect(missionWrite.ok()).toBeTruthy();
+
+  const created = await page.request.post("/api/apps", { headers: { origin }, data: { name: `Cross-session ${Date.now()}` } });
+  expect(created.ok()).toBeTruthy();
+  const appId = (await created.json()).application.id as string;
+  const problem = "Resume private Studio notes in another signed-in browser.";
+  const learningRecord = {
+    stage: "brief",
+    projectNotes: {
+      user: "Learners changing devices", problem, why: "Keep learning work available across sessions.",
+      behavior: "Read the saved note after signing in again.", constraints: "", instruction: "",
+      brief: { user: "Learners changing devices", problem, behavior: "Read the saved note.", constraints: "", scope: [] },
+      nextGoal: "", shareDecision: "",
+    },
+    features: [], observations: [], feedback: [], versionNotes: [],
+  };
+  const studioWrite = await page.request.put("/api/learner/studio", {
+    headers: { origin },
+    data: { appId, expectedRevision: null, learningRecord },
+  });
+  expect(studioWrite.ok()).toBeTruthy();
+
+  const secondContext = await browser.newContext();
+  try {
+    const secondPage = await secondContext.newPage();
+    const session = await secondContext.request.post(`${origin}/api/test-auth/session`, {
+      headers: { origin },
+      data: { userId: ownerId },
+    });
+    expect(session.ok()).toBeTruthy();
+    await secondPage.goto(origin);
+    const state = await secondPage.evaluate(async (targetAppId: string) => {
+      const [missionResponse, studioResponse] = await Promise.all([
+        fetch("/api/learner/progress", { cache: "no-store" }),
+        fetch("/api/learner/studio", { cache: "no-store" }),
+      ]);
+      return {
+        missionStatus: missionResponse.status,
+        mission: await missionResponse.json(),
+        studioStatus: studioResponse.status,
+        studio: await studioResponse.json(),
+        targetAppId,
+      };
+    }, appId);
+
+    expect(state.missionStatus).toBe(200);
+    expect(state.mission).toMatchObject({ learnerId: ownerId, progress: { activeMission: 4, mission4State: { checkpoint: "saved on browser one" } } });
+    expect(state.studioStatus).toBe(200);
+    expect(state.studio.applications.map((application: { id: string }) => application.id)).toContain(appId);
+    expect(state.studio.learningRecords).toContainEqual(expect.objectContaining({ appId, stage: "brief", projectNotes: expect.objectContaining({ problem }) }));
+  } finally {
+    await secondContext.close();
+  }
+});
