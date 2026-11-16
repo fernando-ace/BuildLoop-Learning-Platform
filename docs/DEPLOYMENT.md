@@ -4,8 +4,10 @@
 
 Goal 14 staging is a noncommercial Vercel Preview deployment of the existing `buildloop-learning-platform` project using a dedicated Neon Free database. It must remain behind Vercel Authentication. Do not connect a custom domain, use a production deployment, or enable paid add-ons. Confirm the project remains on a $0 plan before provisioning any provider resource.
 
-Vercel project ID: `prj_0WDtrIFOTYSHxeYHqfC4RPEIQCPl`  
-Vercel team ID: `team_FxCiuzlr4hc0v3bitW4dWkVg`  
+Vercel project ID: `prj_0WDtrIFOTYSHxeYHqfC4RPEIQCPl`
+
+Vercel team ID: `team_FxCiuzlr4hc0v3bitW4dWkVg`
+
 Goal 14 branch: `goal-14-production-readiness`
 
 ## Database setup
