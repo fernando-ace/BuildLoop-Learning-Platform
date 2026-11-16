@@ -30,7 +30,7 @@ CI now uses full Git history for PR/push whitespace validation, runs `npx drizzl
 
 ## Browser and database checks
 
-`npm run test:e2e` ran 33 Chromium cases: 20 passed and 13 Studio cases failed during shared setup. The test-auth endpoint could not create its test user because this worktree has no `DATABASE_URL`. The 13 failures report `Test authentication is not configured.` and happen before the Studio flows run; they are environment-blocked, not passing Studio evidence.
+An initial `npm run test:e2e` run had no `DATABASE_URL`, so 13 Studio cases stopped at test authentication while 20 mission cases passed. The Playwright web server now explicitly uses the local development environment, because Next.js also loads `.env.local` and can otherwise inherit its `VERCEL_ENV=preview` marker. A subsequent 33-case local Chromium run used the migrated Neon Preview database and reported 24 passed, 9 failed. Failures included mission-state assertions/timeouts, Studio workflows affected by request/DB errors, duplicate project-name matching with the shared test owner, and an ambiguous `role=status` selector. Runtime logs recorded database pool errors. This was a local app run against the managed Preview database, not a hosted Preview run. The run created 12 test-owned projects/apps and one reserved synthetic user; scoped cleanup removed all of them, and a read-only follow-up found zero `test-owner`/`test-collaborator` users, owned projects, or applications.
 
 After adding learner cache isolation, the targeted first-Mission Chromium flow was rerun separately and passed (1 test).
 
