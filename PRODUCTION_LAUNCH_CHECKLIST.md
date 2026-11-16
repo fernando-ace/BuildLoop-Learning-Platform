@@ -20,11 +20,13 @@
 - [x] Generated app execution remains declarative and constrained.
 - [x] Six Missions' checkpoints and attempt/skill progress persist per authenticated learner, migrate a local save when no account record exists, and use revision checks for multi-device writes.
 - [x] Studio coaching, reflection, observation, and version-learning records are per learner/app, revision-checked, private to their author, and synchronized with browser-save conflict choices.
+- [x] Documented Neon Free's published backup limits: 6-hour maximum instant-restore history capped at 1 GB, one manual snapshot, and no scheduled backup schedules. The connected project's active history setting and branch quota remain unverified.
 - [ ] Verify signed-in Missions and Studio resume across two browsers against a hosted Preview deployment; none exists yet.
 - [ ] Invitation email is delivered and resend behavior is verified.
 - [ ] Verify migration `0004_shared_operation_rate_limits` and Builder/auth throttles across multiple hosted instances. Preview DB migration and local integration coverage are recorded; hosted multi-instance and Production verification are not.
 - [ ] External error monitoring is configured and a safe test event is verified.
 - [ ] Run and record an isolated database restore drill using [the operations runbook](docs/OPERATIONS_RUNBOOK.md); verify provider retention/PITR settings and operator-approved recovery objectives.
+- [ ] Verify the Neon Preview project's live history setting and complete the no-cost synthetic point-in-time branch check; no snapshot or in-place restore may be used for this drill.
 
 ## Requires operator or provider access
 

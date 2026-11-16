@@ -2,6 +2,25 @@
 
 This runbook covers production database recovery and release diagnosis for BuildLoop. Provider-specific backup configuration and a completed restore drill are external launch requirements; this document does not claim that backups are enabled.
 
+## Current Neon Free Preview limits
+
+Neon's current plan documentation lists the Free plan at $0/month with a maximum six-hour instant-restore history window capped at 1 GB of changes, one manual snapshot, and no scheduled backup schedules. Snapshot storage is listed at $0.09/GB-month. Do not create a manual snapshot under Goal 14's $0 limit. Confirm the connected project's actual history-window setting and remaining Free quotas in the Neon Console before any recovery operation; these live settings were not verified from this checkout. Free has no uptime SLA. See [Neon plans](https://neon.com/docs/introduction/plans) and [history window](https://neon.com/docs/postgres/backup-restore/history-window).
+
+The six-hour window is the maximum plan capability, not proof that a particular recovery point is available. Point-in-time restore applies to root branches and overwrites every database and all schema on the branch, temporarily interrupting its connections; Neon keeps a pre-restore branch for rollback. Never use an in-place root restore for a staging drill. A verified RPO/RTO is not established for the current Preview database, and Free does not meet the production seven-day retention gate.
+
+### No-cost synthetic Preview recovery check
+
+This procedure has not yet been executed. Run it only after confirming the project is still Free, the history window is enabled, at least one branch slot is free, and the test can complete within the retained history. Do not create a snapshot.
+
+1. Record the project and root-branch identifiers privately; never record connection values.
+2. Create a temporary table with a unique Goal 14 marker in the Preview root branch, insert one synthetic row, and record the database timestamp in UTC.
+3. Delete the marker row after recording the timestamp.
+4. Use Neon's point-in-time **branch creation** to create a temporary isolated branch from the root at that timestamp. Do not restore the root in place.
+5. Connect to the temporary branch and run a read-only query confirming the marker exists. Record only pass/fail, timestamp, duration, and table/row counts.
+6. Delete the temporary branch and compute, then remove the marker/table from the Preview root. Verify no marker or branch remains and the project is within its Free quotas.
+
+If the console does not offer historical branch creation on the Free project, stop and record the capability as unavailable; do not upgrade or substitute a snapshot. A successful branch check verifies recovery-point branching only, not an in-place restore or a production backup schedule.
+
 ## Backup policy to configure
 
 - Use the managed PostgreSQL provider's automated backups with at least seven days of retention. Enable point-in-time recovery (PITR) when the selected plan supports it.
