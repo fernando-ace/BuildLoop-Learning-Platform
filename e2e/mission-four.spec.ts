@@ -46,7 +46,7 @@ test("Mission 4 locks until Mission 3 is done, then saves, resumes, completes, a
   await page.reload();
   await expect(page.getByRole("article", { name: "Mission 4 locked" })).toContainText("Complete Mission 3 to continue");
   await seedMission3Complete(page);
-  await expect(page.locator(".mission-number").allTextContents()).resolves.toEqual(["MISSION 1", "MISSION 2", "MISSION 3", "MISSION 4", "MISSION 5", "MISSION 6 · FINAL PROJECT"]);
+  await expect.poll(() => page.locator(".mission-number").allTextContents()).toEqual(["MISSION 1", "MISSION 2", "MISSION 3", "MISSION 4", "MISSION 5", "MISSION 6 · FINAL PROJECT"]);
   await dimensions(page, 1440);
   await startMission4(page);
   await choosePlanAndGoal(page, /Which problem matters most/, /Let students leave a session/);

@@ -31,4 +31,12 @@ describe("platform identity boundary", () => {
     expect(getTestIdentity(request(`test-admin.${expiry}.${signature}`))).toBeNull();
     expect(getTestIdentity(request(`${userId}.${expiry}.not-a-signature`))).toBeNull();
   });
+
+  it("accepts only scoped per-run browser test identities", () => {
+    vi.stubEnv("NODE_ENV", "test"); vi.stubEnv("BUILDLOOP_AUTH_MODE", "test"); vi.stubEnv("BUILDLOOP_TEST_AUTH_SECRET", "unit-test-secret-with-at-least-32-characters");
+    const userId = "e2e-owner-0123456789abcdef";
+    const token = issueTestSession(userId);
+    expect(getTestIdentity(request(token))).toMatchObject({ id: userId, email: `${userId}@example.test` });
+    expect(() => issueTestSession("e2e-admin-0123456789abcdef")).toThrow("Test auth is available only to the explicitly enabled development test server.");
+  });
 });

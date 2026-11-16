@@ -5,12 +5,25 @@ import { logEvent } from "./logger";
 
 export interface PlatformIdentity { id: string; name: string; email: string; }
 
-const TEST_USERS: Record<string, PlatformIdentity> = {
+const LEGACY_TEST_USERS: Record<string, PlatformIdentity> = {
   "test-owner": { id: "test-owner", name: "Test Owner", email: "owner@example.test" },
   "test-collaborator": { id: "test-collaborator", name: "Test Collaborator", email: "collaborator@example.test" },
 };
+const E2E_USER_ID = /^e2e-(owner|collaborator)-[a-f0-9]{16}$/;
 const TEST_COOKIE = "buildloop_test_session";
 const testModeEnabled = () => (process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test") && process.env.BUILDLOOP_AUTH_MODE === "test";
+
+export function getTestUserIdentity(userId: string): PlatformIdentity | null {
+  if (Object.hasOwn(LEGACY_TEST_USERS, userId)) return LEGACY_TEST_USERS[userId];
+  const match = E2E_USER_ID.exec(userId);
+  if (!match) return null;
+  const role = match[1];
+  return {
+    id: userId,
+    name: role === "owner" ? "E2E Owner" : "E2E Collaborator",
+    email: `${userId}@example.test`,
+  };
+}
 
 export function getTestIdentity(request: Request): PlatformIdentity | null {
   if (!testModeEnabled()) return null;
@@ -20,14 +33,15 @@ export function getTestIdentity(request: Request): PlatformIdentity | null {
   const token = pair?.slice(TEST_COOKIE.length + 1);
   if (!token || token.length > 512) return null;
   const [userId, expiresText, signature] = token.split(".");
-  if (!userId || !expiresText || !signature || !TEST_USERS[userId]) return null;
+  const identity = userId ? getTestUserIdentity(userId) : null;
+  if (!userId || !expiresText || !signature || !identity) return null;
   const expiresAt = Number(expiresText);
   if (!Number.isSafeInteger(expiresAt) || expiresAt < Date.now()) return null;
   const expected = createHmac("sha256", secret).update(`${userId}.${expiresText}`).digest();
   let received: Buffer;
   try { received = Buffer.from(signature, "base64url"); } catch { return null; }
   if (received.length !== expected.length || !timingSafeEqual(received, expected)) return null;
-  return TEST_USERS[userId];
+  return identity;
 }
 
 export async function getPlatformIdentity(request: Request): Promise<PlatformIdentity | null> {
@@ -44,7 +58,7 @@ export async function getPlatformIdentity(request: Request): Promise<PlatformIde
 }
 
 export function issueTestSession(userId: string) {
-  if (!testModeEnabled() || !TEST_USERS[userId]) throw new Error("Test auth is available only to the explicitly enabled development test server.");
+  if (!testModeEnabled() || !getTestUserIdentity(userId)) throw new Error("Test auth is available only to the explicitly enabled development test server.");
   const secret = process.env.BUILDLOOP_TEST_AUTH_SECRET;
   if (!secret || secret.length < 32) throw new Error("BUILDLOOP_TEST_AUTH_SECRET must be configured for test authentication.");
   const expiresAt = String(Date.now() + 60 * 60 * 1000);

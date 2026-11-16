@@ -1,8 +1,26 @@
-import { expect, test, type Page } from "@playwright/test";
+import { createHash } from "node:crypto";
+import { expect, test, type Page, type TestInfo } from "@playwright/test";
 import { campusEventOperationsV4 } from "../src/lib/builder/v4-platform-fixtures";
+import { v2Fixtures } from "../src/lib/builder/v2";
 
-test.beforeEach(async ({ page }) => {
-  const response = await page.request.post("/api/test-auth/session", { headers: { origin: "http://127.0.0.1:3107" }, data: { userId: "test-owner" } });
+function e2eUserId(role: "owner" | "collaborator", testInfo: TestInfo) {
+  const suffix = createHash("sha256").update(testInfo.testId).digest("hex").slice(0, 16);
+  return `e2e-${role}-${suffix}`;
+}
+
+test.beforeEach(async ({ page }, testInfo) => {
+  const headers = { origin: "http://127.0.0.1:3107" };
+  const cleanup = await page.request.delete("/api/test-auth/session", { headers, data: { cleanupUserIds: [e2eUserId("owner", testInfo), e2eUserId("collaborator", testInfo)] } });
+  expect(cleanup.ok(), await cleanup.text()).toBeTruthy();
+  const response = await page.request.post("/api/test-auth/session", { headers, data: { userId: e2eUserId("owner", testInfo) } });
+  expect(response.ok(), await response.text()).toBeTruthy();
+});
+
+test.afterEach(async ({ page }, testInfo) => {
+  const response = await page.request.delete("/api/test-auth/session", {
+    headers: { origin: "http://127.0.0.1:3107" },
+    data: { cleanupUserIds: [e2eUserId("owner", testInfo), e2eUserId("collaborator", testInfo)] },
+  });
   expect(response.ok(), await response.text()).toBeTruthy();
 });
 
@@ -465,7 +483,7 @@ test("Studio keeps multiple projects and confirms project deletion", async ({ pa
   await page.getByRole("article").filter({ has: page.getByRole("heading", { name: "Topic Tracker" }) }).getByRole("button", { name: "Resume project" }).click();
   await expect(page.getByRole("heading", { name: "Start with one person and one problem." })).toBeVisible();
   page.once("dialog", (dialog) => dialog.accept());
-  await page.getByRole("button", { name: "Delete project" }).click();
+  await page.getByRole("button", { name: "Remove from Studio" }).click();
   await expect(page.getByRole("heading", { name: "Reading log" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Topic Tracker" })).toHaveCount(0);
 });
@@ -482,10 +500,15 @@ test("Studio keeps the Builder Brief after a connection failure and retries", as
   await page.route("**/api/studio/build", async (route) => {
     calls += 1;
     if (calls === 1) { await new Promise((resolve) => setTimeout(resolve, 900)); await route.fulfill({ status: 502, contentType: "application/json", body: JSON.stringify({ error: "The Builder couldn't connect right now. Your project is safe. Try the build again." }) }); }
-    else await route.continue();
+    else {
+      const artifact = structuredClone(v2Fixtures[2]);
+      artifact.title = "Topic Tracker";
+      artifact.summary = "A practical first version for students who study after school.";
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ provider: "deterministic", attempts: 1, artifact }) });
+    }
   });
   await page.getByRole("button", { name: "Build Version 1" }).click();
-  await expect(page.getByRole("status")).toContainText("making your version");
+  await expect(page.locator(".studio-building")).toContainText("making your version");
   await checkStudioWidths(page, "build status", [390, 430]);
   await expect(page.locator(".studio-build-error[role=alert]")).toContainText("couldn't connect");
   await page.reload();
@@ -507,8 +530,9 @@ test("Studio never previews an unsafe generated artifact", async ({ page }) => {
   await expect(page.locator("iframe")).toHaveCount(0);
 });
 
-test("V4 shared app uses real signed-in membership, invitation acceptance, and role-checked shared records", async ({ page }) => {
+test("V4 shared app uses real signed-in membership, invitation acceptance, and role-checked shared records", async ({ page }, testInfo) => {
   const origin = "http://127.0.0.1:3107";
+  const collaboratorId = e2eUserId("collaborator", testInfo);
   const appName = `Campus Events ${Date.now()}`;
   const created = await page.request.post("/api/apps", { headers: { origin }, data: { name: appName } });
   const application = (await created.json()).application;
@@ -518,7 +542,7 @@ test("V4 shared app uses real signed-in membership, invitation acceptance, and r
   expect(version.ok(), await version.text()).toBeTruthy();
   const publication = await page.request.post(`/api/apps/${appId}/publish`, { headers: { origin }, data: { action: "publish", versionId: "v1", expectedPublishedVersion: null } });
   expect(publication.ok(), await publication.text()).toBeTruthy();
-  const inviteResponse = await page.request.post(`/api/apps/${appId}/invitations`, { headers: { origin }, data: { appRole: "volunteer", email: "collaborator@example.test" } });
+  const inviteResponse = await page.request.post(`/api/apps/${appId}/invitations`, { headers: { origin }, data: { appRole: "volunteer", email: `${collaboratorId}@example.test` } });
   expect(inviteResponse.ok(), await inviteResponse.text()).toBeTruthy();
   const invitation = (await inviteResponse.json()).invitation;
   const token = new URL(invitation.url).pathname.split("/").at(-1)!;
@@ -527,13 +551,14 @@ test("V4 shared app uses real signed-in membership, invitation acceptance, and r
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto("/");
   await page.getByRole("button", { name: "Explore Studio" }).click();
-  await expect(page.getByText(appName, { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: appName, exact: true })).toBeVisible();
   await page.locator(".studio-account-apps li").filter({ hasText: appName }).getByRole("link", { name: "Open preview" }).click();
   await expect(page.getByText("Preview · Version 1")).toBeVisible();
   await page.goto(`/apps/${appId}`);
   await expect(page.getByRole("heading", { name: "Campus Event Operations" })).toBeVisible();
-  await expect(page.getByText("Test Owner", { exact: true })).toBeVisible();
-  await page.request.post("/api/test-auth/session", { headers: { origin }, data: { userId: "test-collaborator" } });
+  await expect(page.getByText("E2E Owner", { exact: true })).toBeVisible();
+  const collaboratorSession = await page.request.post("/api/test-auth/session", { headers: { origin }, data: { userId: collaboratorId } });
+  expect(collaboratorSession.ok(), await collaboratorSession.text()).toBeTruthy();
   await page.goto(`/invite/${token}`);
   await expect(page).toHaveURL(new RegExp(`/apps/${appId}$`));
   await expect(page.getByRole("heading", { name: "Campus Event Operations" })).toBeVisible();
