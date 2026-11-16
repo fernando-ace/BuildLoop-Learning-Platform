@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { getBuildLoopEnvironment, getPublicAppUrl, getReleaseMetadata } from "./config";
+import { allowPreviewUnverifiedSignups, getBuildLoopEnvironment, getPublicAppUrl, getReleaseMetadata } from "./config";
 
 afterEach(() => vi.unstubAllEnvs());
 
@@ -30,5 +30,19 @@ describe("deployment configuration", () => {
     expect(getPublicAppUrl()).toBe("http://localhost:3000");
     vi.stubEnv("PUBLIC_APP_URL", "http://localhost:3000/redirect");
     expect(() => getPublicAppUrl()).toThrow("must be an origin");
+  });
+
+  it("uses the Vercel preview host and gates unverified signup to an explicit preview opt-in", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("BUILDLOOP_ENVIRONMENT", "preview");
+    vi.stubEnv("VERCEL_ENV", "preview");
+    vi.stubEnv("VERCEL_URL", "buildloop-feature-abc.vercel.app");
+    vi.stubEnv("PUBLIC_APP_URL", "");
+    vi.stubEnv("BUILDLOOP_PREVIEW_ALLOW_UNVERIFIED_SIGNUPS", "1");
+    expect(getPublicAppUrl()).toBe("https://buildloop-feature-abc.vercel.app");
+    expect(allowPreviewUnverifiedSignups()).toBe(true);
+    vi.stubEnv("VERCEL_ENV", "production");
+    vi.stubEnv("BUILDLOOP_ENVIRONMENT", "production");
+    expect(allowPreviewUnverifiedSignups()).toBe(false);
   });
 });

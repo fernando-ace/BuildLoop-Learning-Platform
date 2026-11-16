@@ -4,6 +4,10 @@ export type BuildLoopEnvironment = "development" | "test" | "preview" | "product
 
 export type HostedReadinessCheck = "configured" | "unavailable" | "not_required";
 
+export function allowPreviewUnverifiedSignups() {
+  return getBuildLoopEnvironment() === "preview" && process.env.BUILDLOOP_PREVIEW_ALLOW_UNVERIFIED_SIGNUPS === "1";
+}
+
 export function getBuildLoopEnvironment(): BuildLoopEnvironment {
   const explicit = process.env.BUILDLOOP_ENVIRONMENT;
   const inferred = process.env.VERCEL_ENV === "preview" ? "preview" : process.env.VERCEL_ENV === "production" ? "production" : process.env.NODE_ENV;
@@ -23,8 +27,8 @@ export function getHostedReadinessChecks(): { authentication: HostedReadinessChe
   }
 
   const secret = process.env.BETTER_AUTH_SECRET;
-  const publicAppUrl = process.env.PUBLIC_APP_URL;
-  const authUrl = process.env.BETTER_AUTH_URL ?? publicAppUrl;
+  const publicAppUrl = process.env.PUBLIC_APP_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined);
+  const authUrl = process.env.BETTER_AUTH_URL || publicAppUrl;
   let authentication: HostedReadinessCheck = "unavailable";
   if (secret && secret.length >= 32 && publicAppUrl && authUrl) {
     try {
@@ -49,7 +53,7 @@ export function getHostedReadinessChecks(): { authentication: HostedReadinessChe
 export function getPublicAppUrl(requestUrl?: string) {
   const vercelOrigin = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined;
   const requestOrigin = requestUrl ? new URL(requestUrl).origin : undefined;
-  const raw = process.env.PUBLIC_APP_URL ?? vercelOrigin ?? process.env.BETTER_AUTH_URL ?? (getBuildLoopEnvironment() === "production" ? undefined : requestOrigin ?? "http://localhost:3000");
+  const raw = process.env.PUBLIC_APP_URL || vercelOrigin || process.env.BETTER_AUTH_URL || (getBuildLoopEnvironment() === "production" ? undefined : requestOrigin ?? "http://localhost:3000");
   if (!raw) throw new Error("PUBLIC_APP_URL must be configured.");
   const url = new URL(raw);
   if (url.username || url.password || url.search || url.hash || (url.pathname !== "/" && url.pathname !== "")) throw new Error("PUBLIC_APP_URL must be an origin without credentials, path, query, or fragment.");

@@ -27,7 +27,8 @@ export async function GET(request: Request) {
     logEvent("error", "health.database_unavailable", { requestId: id });
   }
   if (migrationStatus !== "current") logEvent("error", "health.migration_journal_not_current", { requestId: id, migrationStatus });
-  const missingHostedChecks = Object.entries(hosted).filter(([, result]) => result === "unavailable").map(([name]) => name);
+  const requiredHostedChecks = getReleaseMetadata().environment === "production" ? Object.entries(hosted) : [["authentication", hosted.authentication] as const];
+  const missingHostedChecks = requiredHostedChecks.filter(([, result]) => result === "unavailable").map(([name]) => name);
   const ready = database === "ok" && migrationStatus === "current" && missingHostedChecks.length === 0;
   const status = ready ? "ready" : "not_ready";
   logEvent(ready ? "info" : "warn", "health.readiness", { requestId: id, result: status, durationMs: Date.now() - started, unavailableHostedChecks: missingHostedChecks.join(",") });

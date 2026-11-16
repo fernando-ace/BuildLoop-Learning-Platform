@@ -3,7 +3,7 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { getPlatformDatabase } from "./database";
 import { authAccounts, authSessions, authVerifications, platformUsers } from "./schema";
-import { getBuildLoopEnvironment, getPublicAppUrl } from "./config";
+import { allowPreviewUnverifiedSignups, getBuildLoopEnvironment, getPublicAppUrl } from "./config";
 import { sendRequiredAccountActionEmail, type AccountActionEmail } from "./email";
 import { logEvent } from "./logger";
 import { consumeOperationLimit } from "./rate-limit";
@@ -20,10 +20,11 @@ async function deliverAuthEmail(kind: "verification" | "password_reset", message
 function createAuth() {
   const secret = process.env.BETTER_AUTH_SECRET;
   const environment = getBuildLoopEnvironment();
+  const unverifiedPreviewSignups = allowPreviewUnverifiedSignups();
   if (!secret || secret.length < 32) {
     if (environment === "production" || environment === "preview") throw new Error("BETTER_AUTH_SECRET must be set to at least 32 characters.");
   }
-  const baseURL = process.env.BETTER_AUTH_URL ?? getPublicAppUrl();
+  const baseURL = process.env.BETTER_AUTH_URL || getPublicAppUrl();
   if (new URL(baseURL).origin !== getPublicAppUrl()) throw new Error("BETTER_AUTH_URL and PUBLIC_APP_URL must use the same origin.");
   const trustedOrigins = new Set([getPublicAppUrl(), new URL(baseURL).origin]);
   if (process.env.VERCEL_URL) trustedOrigins.add(`https://${process.env.VERCEL_URL}`);
@@ -41,7 +42,7 @@ function createAuth() {
       minPasswordLength: 12,
       maxPasswordLength: 128,
       autoSignIn: environment !== "production" && environment !== "preview",
-      requireEmailVerification: environment === "production" || environment === "preview",
+      requireEmailVerification: environment === "production" || (environment === "preview" && !unverifiedPreviewSignups),
       resetPasswordTokenExpiresIn: 60 * 60,
       revokeSessionsOnPasswordReset: true,
       sendResetPassword: async ({ user, url }) => {
@@ -49,8 +50,8 @@ function createAuth() {
       },
     },
     emailVerification: {
-      sendOnSignUp: environment === "production" || environment === "preview",
-      sendOnSignIn: environment === "production" || environment === "preview",
+      sendOnSignUp: environment === "production" || (environment === "preview" && !unverifiedPreviewSignups),
+      sendOnSignIn: environment === "production" || (environment === "preview" && !unverifiedPreviewSignups),
       autoSignInAfterVerification: true,
       expiresIn: 60 * 60,
       sendVerificationEmail: async ({ user, url }) => {

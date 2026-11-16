@@ -9,7 +9,7 @@ describe("readiness endpoint", () => {
   beforeEach(() => {
     query.mockReset();
     vi.stubEnv("NODE_ENV", "test"); vi.stubEnv("BUILDLOOP_ENVIRONMENT", "test");
-    for (const name of ["BETTER_AUTH_SECRET", "PUBLIC_APP_URL", "BETTER_AUTH_URL", "RESEND_API_KEY", "EMAIL_FROM", "OPENAI_API_KEY", "SENTRY_DSN", "NEXT_PUBLIC_SENTRY_DSN"]) vi.stubEnv(name, "");
+    for (const name of ["BETTER_AUTH_SECRET", "PUBLIC_APP_URL", "BETTER_AUTH_URL", "RESEND_API_KEY", "EMAIL_FROM", "OPENAI_API_KEY", "SENTRY_DSN", "NEXT_PUBLIC_SENTRY_DSN", "VERCEL_URL", "VERCEL_ENV"]) vi.stubEnv(name, "");
   });
 
   it("returns ready only when PostgreSQL responds", async () => {
@@ -75,5 +75,16 @@ describe("readiness endpoint", () => {
     const response = await GET(new Request("https://buildloop.example.test/api/health/ready"));
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ status: "ready", checks: { database: "ok", migrationJournal: "current", authentication: "configured", email: "configured", builder: "configured", monitoring: "configured" } });
+  });
+
+  it("keeps preview readiness usable without optional paid integrations", async () => {
+    vi.stubEnv("BUILDLOOP_ENVIRONMENT", "preview");
+    vi.stubEnv("VERCEL_ENV", "preview");
+    vi.stubEnv("VERCEL_URL", "buildloop-feature-abc.vercel.app");
+    vi.stubEnv("BETTER_AUTH_SECRET", "x".repeat(40));
+    query.mockResolvedValueOnce({ rows: [{ "?column?": 1 }] }).mockResolvedValueOnce({ rows: [{ table_name: "drizzle.__drizzle_migrations" }] }).mockResolvedValueOnce({ rows: [{ last_migration: "1794209352358" }] });
+    const response = await GET(new Request("https://buildloop-feature-abc.vercel.app/api/health/ready"));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ status: "ready", checks: { authentication: "configured", email: "unavailable", builder: "unavailable", monitoring: "unavailable" } });
   });
 });

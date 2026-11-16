@@ -1,6 +1,6 @@
 # Goal 14 validation evidence
 
-Updated 2026-11-09 from the isolated `goal-14-production-readiness` worktree. This records local evidence only; it does not attest to a hosted deployment.
+Updated 2026-11-15 from the isolated `goal-14-production-readiness` worktree. This records local and provider-console observations only; it does not attest to a hosted deployment.
 
 ## Repository checks
 
@@ -8,9 +8,9 @@ Updated 2026-11-09 from the isolated `goal-14-production-readiness` worktree. Th
 | --- | --- | --- |
 | `npm run typecheck` | Passed | TypeScript check. |
 | `npm run lint` | Passed | ESLint. |
-| `npm test` | 235 passed, 9 skipped (244 total) | 39 test files passed; 2 skipped. PostgreSQL integration tests skip without `DATABASE_URL`; see below. The added readiness cases cover hosted configuration, secret redaction, and stale migrations; the latest regression covers oversized authenticated app mutations. |
+| `npm test` | 237 passed, 9 skipped (246 total) | 39 test files passed; 2 skipped. PostgreSQL integration tests skip without `DATABASE_URL`; see below. New tests cover Vercel preview origins, the explicit preview-only signup opt-in, and readiness with optional integrations absent. |
 | `npm run build` | Passed | Next.js 16.4.5 production build. |
-| `npm audit --audit-level=moderate` | 0 vulnerabilities | Dependency audit run 2026-11-09. |
+| `npm audit --audit-level=moderate` | 0 vulnerabilities | Dependency audit run 2026-11-15. |
 | `npx drizzle-kit check` | Passed | Migration journal and snapshots are internally consistent. This does not apply migrations to a database. |
 | `git diff --check` | Passed | No whitespace errors in the reviewed changes. |
 
@@ -48,7 +48,9 @@ Mission browser saves also switch by linked learner. A unit regression test veri
 
 ## Hosted-service evidence
 
-The connected Vercel account had no BuildLoop project for the repository. A dedicated Next.js project shell was created and verified with Node 22.x; it has no Git connection, deployment, or domain yet. The connected Supabase account has three unrelated projects and no dedicated BuildLoop database. GitHub API inspection confirmed `master` currently has no protection rule and no Actions workflow on the default branch; the local CI workflow has not been pushed. No managed database migration, public domain, Resend delivery, Sentry event, database backup, or restore drill has been verified. The launch checklist keeps these items open until the corresponding external resource is configured and tested.
+The existing Vercel project `buildloop-learning-platform` (ID `prj_0WDtrIFOTYSHxeYHqfC4RPEIQCPl`) is on the Hobby plan, has Node 22.x, SSO protection enabled for all non-custom-domain deployments, no domains, no deployments, and no Git connection. Git deployment context shows no BuildLoop-linked project. Listing integration configurations through the connected Vercel API returned 403 Forbidden; the Vercel CLI is not installed. The Neon console is signed into the organization `Vercel: Fernando Acevedo's projects` and shows one unrelated project `neon-pass-flow-database` in AWS US East 1; it was not modified. Neon Console states new projects in this organization must be created through the Neon Postgres integration in Vercel. Vercel's browser tab currently displays its login page. No new database or deployment was created, and no resource with a chargeable plan was activated. The smallest external step is to sign into Vercel in the browser and install/connect the Neon Postgres integration on the existing BuildLoop project using the Free plan, then link that project to the existing Git repository. Integration and deployment API access remains unverified until that is done.
+
+The continuation adds `DATABASE_MIGRATION_URL` support for direct migration connections while retaining `DATABASE_URL` for pooled runtime traffic. Preview readiness now requires the database, current migrations, and authentication; missing email, Builder, and monitoring providers remain visible as unavailable and are required in Production only. An explicit `BUILDLOOP_PREVIEW_ALLOW_UNVERIFIED_SIGNUPS=1` opt-in is honored only in Preview and is documented for use only when Vercel Authentication protects all preview URLs. No preview deployment, live provider authentication, email, AI, monitoring, database migration, backup, or restore drill has been verified.
 
 ## Local commits
 
