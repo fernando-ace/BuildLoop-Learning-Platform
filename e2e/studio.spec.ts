@@ -37,6 +37,7 @@ async function startProject(page: Page, checkEntryResponsive = false, details = 
   await page.getByLabel("What are they trying to do, and what gets in the way?").fill(details.problem);
   await page.getByLabel("Why does solving this matter?").fill(details.why);
   await page.getByRole("button", { name: "Create project" }).click();
+  await expect(page.getByRole("heading", { name: "Start with one person and one problem." })).toBeVisible();
 }
 
 async function checkStudioWidths(page: Page, phase: string, widths = [390, 430, 1365, 1440]) {
@@ -448,6 +449,27 @@ test("Studio can create three immutable versions and reopen an older preview", a
   await expect(page.frameLocator('iframe[title="Topic Tracker interactive preview"]').getByText("Plan kickoff")).toBeVisible();
   await page.getByRole("button", { name: "Close older preview" }).click();
   await expect(page.getByRole("heading", { name: "Version 1 preview" })).toHaveCount(0);
+});
+
+test("new Studio project fields stay locked while creation is pending", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await page.getByRole("button", { name: "Explore Studio" }).click();
+  await page.getByRole("button", { name: "Start a project" }).click();
+  await page.getByLabel("Project name").fill("Topic Tracker");
+  await page.getByLabel("Who is this for?").fill("Students who study after school");
+  const problem = page.getByLabel("What are they trying to do, and what gets in the way?");
+  await problem.fill("They lose track of which topics need more practice before a test");
+  await page.getByLabel("Why does solving this matter?").fill("They want to use their study time well");
+  await page.route("**/api/apps", async (route) => {
+    if (route.request().method() === "POST") await new Promise((resolve) => setTimeout(resolve, 500));
+    await route.continue();
+  });
+  await page.getByRole("button", { name: "Create project" }).click();
+  await expect(problem).toBeDisabled();
+  await expect(page.getByRole("heading", { name: "Start with one person and one problem." })).toBeVisible();
+  await expect(page.getByLabel("What are they trying to do, and what gets in the way?")).toHaveValue("They lose track of which topics need more practice before a test");
 });
 
 test("Studio gently coaches vague ideas and implementation-first goals", async ({ page }) => {
