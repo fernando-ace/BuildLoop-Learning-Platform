@@ -1,12 +1,12 @@
 # Goal 15 public beta readiness evidence
 
-Updated 2026-11-16. This report tracks the Goal 15 branch only. It does not authorize or attest to a Production deployment.
+Updated 2026-11-17. This report tracks the Goal 15 branch only. It does not authorize or attest to a Goal 15 Production deployment.
 
 ## Decision
 
 **Goal 15 status: PARTIALLY_COMPLETE; public beta verdict: NOT_READY.**
 
-The repository work can improve safeguards and local confidence, but the protected hosted Preview cannot currently be tested. The existing Vercel project has no deployment record. Goal 14's recorded CLI attempts show that Vercel rejected explicit Preview deployment requests because it requires a Production-classified first deployment. Goal 15 forbids creating or promoting a Production deployment, so that prerequisite remains unresolved. No Production deployment, promotion, alias, or protection change is authorized here.
+A protected Vercel Preview is now available. Goal 15's latest branch commit, `2899259`, was pushed and deployed through Git integration to Preview deployment `dpl_HoNkKDGyTEtuFeDe2NcjKHoQNmha` (`https://buildloop-learning-platform-pg92qxuty.vercel.app`). Its home page and live/ready health checks returned 200; readiness reports database `ok`, migration journal `current`, authentication `configured`, and email, Builder, and monitoring `unavailable`. Full authenticated hosted testing still requires an interactive browser session. No Goal 15 Production deployment, promotion, alias, or protection change was made.
 
 ## Starting point
 
@@ -20,12 +20,12 @@ The repository work can improve safeguards and local confidence, but the protect
 | Area | Goal 15 change/evidence | Validation scope |
 | --- | --- | --- |
 | Email transport and templates | Added an injectable transport with a bounded in-memory development/test capture path; local Studio messages now say when mail was captured or failed. Test mode always captures, even if Resend variables are set. | Email suite: 6 passed. Resend responses are mocked; no real message was sent. Live email remains unverified. |
-| Builder security and usage bounds | Authorization now requires app owner/administrator before provider invocation. Added a shared per-account daily quota (default 10, configurable 1–100) alongside 5/minute, and a transaction-scoped advisory lock limiting hosted generation to one in-flight build per account across instances; output remains capped at 6,000 tokens, with one bounded repair attempt and a 45-second timeout. | Earlier focused Builder/rate-limit run: 18 passed. After locking was limited to hosted environments, the route suite passed 11/11 including the contention response. Deterministic/mock behavior only; no live or billable OpenAI request. There is no monetary spend cap. |
+| Builder security and usage bounds | Authorization now requires app owner/administrator before provider invocation. Added a shared per-account daily quota (default 10, configurable 1–100) alongside 5/minute, and a transaction-scoped advisory lock limiting hosted generation to one in-flight build per account across instances; output remains capped at 6,000 tokens, with one bounded repair attempt and a 45-second timeout. | Builder route suite: 11/11. PostgreSQL platform integration suite: 9/9, including competing independent database clients. Deterministic/mock behavior only; no live or billable OpenAI request. There is no monetary spend cap. |
 | Monitoring and operations | Platform API error/authorization logs now include a validated request ID and return it in `X-Request-Id`; Better Auth session lookup errors include the same correlation value. Added health, incident, secret rotation, database diagnosis and failed-deployment procedures. | Unit coverage includes request ID response behavior. Sentry is not configured or externally verified; this log evidence is local. |
 | Tenant isolation and security | Fixed provider invocation before application access checks. Added distinct synthetic account E2E coverage for private app denial, account switching, and logout. | Focused source review plus tests; no critical/high finding remains known from this review. This is not a full penetration test. |
-| Independent browser verification | Added independent browser contexts for distinct test identities; verified private app list/runtime isolation, account switching, and logout. Existing cross-context same-user test verifies persisted Mission and Studio state. | The prior full run passed 35/35 against local app + Neon staging before the hosted-only lock change. The final run passed 32/35; three persistence-heavy cases timed out under staging latency. The Builder coach test passed in isolation after tightening its ambiguous status locator. This is not protected hosted Preview verification. |
+| Independent browser verification | Added independent browser contexts for distinct test identities; verified private app list/runtime isolation, account switching, and logout. Added a Preview signup recovery test and made Preview auth integration cover sign-up without email, separate sign-in, session resolution, and logout. | Prior full local run: 35/35. Latest full local run: 32/35; three persistence-heavy cases timed out under staging latency. Preview signup UI test: 1/1; Preview-mode Neon auth integration: 1/1. Hosted independent-account workflows remain unverified because the browser harness found no running Chrome session. |
 | Missions, Studio, account and publish UX | Kept the existing desktop/mobile Mission and Studio suite; invitation delivery states now distinguish sent, captured, unconfigured, and failed. | Browser suite includes all six Missions, Studio, invitation acceptance/role checks, publish/runtime behavior, and rollback flows, all locally verified. |
-| Production release preparation | Added Goal 15 launch checklist, refreshed operations runbook and deployment boundary, documented email capture/daily Builder environment options, and corrected stale Builder quota architecture notes. | Documentation reviewed locally. No Production config, migration, deployment, promotion, or external provider credential was changed. |
+| Production release preparation | Added Goal 15 launch checklist, refreshed operations runbook and deployment boundary, documented email capture/daily Builder environment options, and corrected stale Builder quota architecture notes. | No Production configuration, migration, deployment, promotion, or external provider credential was changed. Goal 15 feature branch was pushed with explicit authorization; no PR was opened. |
 
 ## Executed checks
 
@@ -33,13 +33,13 @@ The repository work can improve safeguards and local confidence, but the protect
 | --- | --- | --- |
 | `npm run typecheck` | Passed | Local Goal 15 worktree. |
 | `npm run lint` | Passed | Local Goal 15 worktree. |
-| `npm test` | Earlier clean baseline: 245 passed, 9 skipped. Later run: 248 passed, 1 failed, 9 skipped; that route case passed in the later 11/11 route-suite rerun after the Preview setting correction. | Database-free run. Nine DB-backed cases were skipped. |
-| `platform.integration.test.ts` | 8/8 passed | Local test process against Goal 14's dedicated Neon staging database; test-owned rows cleaned by the suite. |
-| `auth.integration.test.ts` | 1/1 passed | Local Better Auth signup/session/logout against the same staging database; synthetic user removed. |
-| `npm run test:e2e` (Playwright CLI, 2 workers) | Prior baseline: 35/35 passed. Latest run: 32/35 passed; three persistence-heavy tests timed out. | Local Next.js dev server with deterministic Builder/test authentication and Neon staging persistence. The isolated coach case passed after selector correction. Not a hosted deployment. |
+| `npm test` | 249 passed, 10 skipped (259 total; 39 files passed, 2 skipped) | Database-free run. Ten database-backed cases were skipped. |
+| `platform.integration.test.ts` | 9/9 passed | Local test process against the dedicated Neon staging database; includes account-lock contention across independent PostgreSQL clients. Test-owned rows cleaned by the suite. |
+| `auth.integration.test.ts` | 1/1 passed | Preview-mode Better Auth against Neon staging: unverified synthetic signup without email, separate password sign-in, session lookup, and logout. Synthetic user removed. |
+| `npm run test:e2e` (Playwright CLI, 2 workers) | Prior baseline: 35/35 passed. Latest full run: 32/35 passed; three persistence-heavy tests timed out. Preview signup UI case: 1/1 passed separately. | Local Next.js dev server; deterministic Builder for broad suite. Preview signup test mocked the auth response to cover the form's no-email path. No full hosted browser run yet. |
 | Post-E2E cleanup query | 0 synthetic users, projects, apps, invitations | Read-only query against the staging database after the passing 35-case run. |
 | Local built-server smoke | Liveness 200; readiness 200; unauthenticated learner API 401 with matching `X-Request-Id` | Built Next.js server in local test environment with staging DB; listener confirmed closed afterward. Not a hosted check. |
-| `npm run build` | Passed | Next.js 16.4.5 production build after source edits. |
+| `npm run build` | Passed | Next.js 16.4.5 production build after the Preview signup fix. |
 | `npm audit --audit-level=moderate` | 0 vulnerabilities | Local lockfile audit; no dependency changes. |
 | `npx drizzle-kit check` | Passed | Checked migration journal/snapshot consistency; no database migration was applied. |
 | `git diff --check` | Passed | Checked after the final documentation changes and before commit. |
@@ -52,18 +52,31 @@ Request IDs accept only bounded safe characters, are included with platform erro
 
 ## Hosted verification and blockers
 
-Goal 14 reports no active deployment URL and no hosted Preview. Therefore Goal 15 has no URL against which to run the requested independent-account persistence, invitation, publishing, rollback, or synthetic-data cleanup flow. The Goal 14 Neon Preview database exists, but local application tests against it do not establish hosted application behavior. Do not bypass SSO or deployment protection and do not satisfy the first-deployment rule with a Production-classified deployment.
+Vercel's current project state differs from the Goal 14 report. Read-only Vercel project inspection confirms the Hobby team, the GitHub link to this repository, `master` as the Production branch, and SSO protection enabled for deployments. Pushing `goal-15-public-beta-readiness` created protected Preview deployments for commits `736ace8` and `2899259`, each with a non-Production target. The latest is deployment `dpl_HoNkKDGyTEtuFeDe2NcjKHoQNmha`, state `READY`, URL `https://buildloop-learning-platform-pg92qxuty.vercel.app`, exact SHA `2899259f8213fc7f2f0bbb29ad018b247b7c6927`. A separate Production-target deployment record was created before Goal 15 began; the project reports `live=false` and no domains. Goal 15 did not create, modify, promote, alias, or change protection on that record.
 
-External action required: Vercel must provide a supported way to establish a protected Preview deployment without creating or promoting a Production deployment, or the project owner must approve a different $0 staging setup that does not affect unrelated infrastructure. Until that is resolved, hosted verification is blocked.
+Hosted checks on commit `2899259`:
 
-Live Resend delivery requires provider credentials and a verified sender/domain; no real recipient is to be contacted during this goal. Live OpenAI generation requires separately authorized zero-charge access; a ChatGPT subscription is not API authorization. Persistent monitoring event receipt also requires configured Sentry DSNs and a verified test event. Record each as unverified until tested.
+- `GET /`: 200; BuildLoop page title present.
+- `GET /api/health/live`: 200; response reports `environment=preview` and release `2899259f8213fc7f2f0bbb29ad018b247b7c6927`.
+- `GET /api/health/ready`: 200; response reports database and migration journal `ok`/`current`, authentication `configured`; email, Builder, and monitoring are `unavailable`. Response request ID: `9497a720-921b-42c7-b237-62ca004435d7`.
+- Follow-up protected API fetches through the Vercel tool stopped at a Vercel authentication redirect (401), so they did not establish application-level session behavior.
+
+The local browser harness could not run interactive hosted tests: its diagnostic reported no Chrome process and no real page. Its setup instructions require Chrome to be open for a local authenticated browser session. No cloud browser was used because it would exceed the $0 constraint. Therefore hosted independent-account Mission/Studio persistence, invitations, publishing, rollback, and cleanup remain unverified. The signup correction is included in the latest hosted Preview build, though its browser behavior was verified only locally with a mocked signup response.
+
+Live Resend delivery requires provider credentials and a verified sender/domain; no real recipient was contacted. Live OpenAI generation requires separately authorized zero-charge access; a ChatGPT subscription is not API authorization. Persistent monitoring event receipt also requires configured Sentry DSNs and a verified test event. The current Preview readiness endpoint marks each unavailable; all remain unverified.
 
 ## Cost and deployment boundary
 
-Authorized spend remains **$0**. No OpenAI request or real email was sent for this work. The inherited Goal 14 evidence records Vercel Hobby and Neon Free, each at $0/month; these plan and billing states were not freshly checked during Goal 15. No paid services or trials were enabled. An operator must recheck provider billing/usage before launch; this report does not claim a current billing-console audit.
+Authorized spend remains **$0**. The current Vercel team plan is Hobby. The inherited Goal 14 evidence lists Neon Free; that plan was not freshly checked. No OpenAI request or real email was sent, and no paid service or trial was enabled. The Vercel billing-charges endpoint returned `costs_not_found`, and Neon billing data was not available, so this is not a current cross-provider billing-console audit. Before launch, an operator must verify Neon billing and provider usage; no spend should be authorized beyond $0.
 
 No Production deployment, promotion, or production database migration is performed by Goal 15.
 
-## Final report fields
+## Remaining steps before launch
 
-Before closing Goal 15, replace pending items with exact evidence and include: commands and pass counts; hosted Preview result; security findings/remediations; unresolved external prerequisites; current monthly service cost and the source used to verify it; branch/commit/worktree status; push/PR state; and the remaining controlled launch steps.
+1. Open Chrome so browser-harness can use the existing authenticated session; then run the independent-account hosted workflows and confirm cleanup.
+2. Provide a verified sender and Resend credentials, then test controlled email delivery without contacting unapproved recipients.
+3. Authorize a $0 OpenAI access arrangement or keep live Builder generation disabled; set a true provider spending ceiling before any paid call.
+4. Configure Sentry or another no-cost persistent monitoring target and verify a test event.
+5. Verify Neon plan/cost, backup and restore procedures, and production-specific configuration and callbacks.
+6. Re-run the full Playwright suite after staging latency stabilizes; resolve or document the three timeout cases.
+7. Review the current changes in a PR. Do not merge, deploy to Production, promote, or weaken SSO as part of this goal.
