@@ -467,7 +467,7 @@ test("Studio gently coaches vague ideas and implementation-first goals", async (
   await page.getByRole("button", { name: "Record test and gather feedback" }).click();
   await page.getByRole("button", { name: "Choose what to work on next" }).click();
   await page.getByLabel("What should change next?").fill("Add a JavaScript array to store topics");
-  await expect(page.getByRole("status")).toContainText("describing the behavior");
+  await expect(page.locator(".studio-coach")).toContainText("describing the behavior");
   await expect(page.getByRole("button", { name: "Build Version 2" })).toBeEnabled();
 });
 

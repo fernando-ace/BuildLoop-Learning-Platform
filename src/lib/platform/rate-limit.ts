@@ -2,6 +2,36 @@ import "server-only";
 import { createHash } from "node:crypto";
 import { getPlatformPool } from "./database";
 
+export type OperationLockResult<T> = { acquired: true; value: T } | { acquired: false };
+
+/** Run work under a transaction-scoped PostgreSQL advisory lock shared across app instances. */
+export async function withOperationLock<T>(key: string, operation: () => Promise<T>): Promise<OperationLockResult<T>> {
+  if (typeof key !== "string" || key.length < 1 || key.length > 1_000) throw new Error("Invalid operation lock key.");
+  const client = await getPlatformPool().connect();
+  let transactionOpen = false;
+  try {
+    await client.query("BEGIN");
+    transactionOpen = true;
+    const result = await client.query<{ acquired: boolean }>("SELECT pg_try_advisory_xact_lock(hashtextextended($1, 0)) AS acquired", [key]);
+    if (!result.rows[0]?.acquired) {
+      await client.query("ROLLBACK");
+      transactionOpen = false;
+      return { acquired: false };
+    }
+    const value = await operation();
+    await client.query("COMMIT");
+    transactionOpen = false;
+    return { acquired: true, value };
+  } catch (error) {
+    if (transactionOpen) {
+      try { await client.query("ROLLBACK"); } catch { /* The connection may already be closed. */ }
+    }
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 /** Consume one fixed-window quota atomically, shared by all instances using the platform database. */
 export async function consumeOperationLimit(key: string, limit: number, windowSeconds: number) {
   if (typeof key !== "string" || key.length < 1 || key.length > 1_000 || !Number.isInteger(limit) || limit < 1 || !Number.isInteger(windowSeconds) || windowSeconds < 1) {

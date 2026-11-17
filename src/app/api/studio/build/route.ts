@@ -1,11 +1,12 @@
 import { BuilderError, MAX_BUILDER_INPUT_CHARS, validateArtifact, type BuilderRequest } from "@/lib/builder/contract";
 import { getBuilder } from "@/lib/builder/provider";
+import type { BuilderResult } from "@/lib/builder/contract";
 import { getPlatformIdentity } from "@/lib/platform/session";
 import { getPlatformRepository, PlatformError } from "@/lib/platform/repository";
 import { sameOrigin } from "@/lib/platform/http";
 import { logEvent } from "@/lib/platform/logger";
 import * as Sentry from "@sentry/nextjs";
-import { consumeOperationLimit } from "@/lib/platform/rate-limit";
+import { consumeOperationLimit, withOperationLock } from "@/lib/platform/rate-limit";
 import { getBuildLoopEnvironment } from "@/lib/platform/config";
 
 export const runtime = "nodejs";
@@ -62,7 +63,14 @@ export async function POST(request: Request) {
     if (application.platform_role !== "owner" && application.platform_role !== "administrator") {
       throw new PlatformError("forbidden", "An app owner or administrator must do that.");
     }
-    const result = await getBuilder().generate(safe);
+    let result: BuilderResult;
+    if (getBuildLoopEnvironment() === "production" || getBuildLoopEnvironment() === "preview") {
+      const generation = await withOperationLock(`builder:${identity.id}`, () => getBuilder().generate(safe));
+      if (!generation.acquired) return Response.json({ error: "A build is already running for your account. Wait for it to finish." }, { status: 429, headers: { "Retry-After": "5", "Cache-Control": "no-store" } });
+      result = generation.value;
+    } else {
+      result = await getBuilder().generate(safe);
+    }
     if (!(process.env.NODE_ENV === "test" && process.env.BUILDLOOP_TEST_DB_PERSISTENCE !== "1")) {
       await repository.saveVersion(identity, value.appId, safe.version, result.artifact, { provider: result.provider, attempts: result.attempts, projectName: project.name });
     }

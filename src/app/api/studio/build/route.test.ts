@@ -3,9 +3,10 @@ import { POST } from "./route";
 import { issueTestSession, testCookieName } from "@/lib/platform/session";
 import { deterministicBuilder } from "@/lib/builder/provider";
 
-const { consumeLimit, getApplication, saveVersion } = vi.hoisted(() => ({ consumeLimit: vi.fn(), getApplication: vi.fn(), saveVersion: vi.fn() }));
+const { consumeLimit, withLock, getApplication, saveVersion } = vi.hoisted(() => ({ consumeLimit: vi.fn(), withLock: vi.fn(), getApplication: vi.fn(), saveVersion: vi.fn() }));
 getApplication.mockResolvedValue({ platform_role: "owner" });
-vi.mock("@/lib/platform/rate-limit", () => ({ consumeOperationLimit: consumeLimit }));
+withLock.mockImplementation(async (_key: string, operation: () => Promise<unknown>) => ({ acquired: true, value: await operation() }));
+vi.mock("@/lib/platform/rate-limit", () => ({ consumeOperationLimit: consumeLimit, withOperationLock: withLock }));
 vi.mock("@/lib/platform/repository", async (importOriginal) => ({
   ...await importOriginal<typeof import("@/lib/platform/repository")>(),
   getPlatformRepository: () => ({ getApplication, saveVersion }),
@@ -18,7 +19,7 @@ function request(body: unknown, headers: Record<string, string> = {}, url = "htt
   return new Request(url, { method: "POST", headers: { host: "localhost", origin: "http://localhost", "content-type": "application/json", cookie, ...headers }, body: JSON.stringify(body) });
 }
 
-afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); consumeLimit.mockReset().mockResolvedValue({ allowed: true, retryAfterSeconds: 60 }); getApplication.mockReset().mockResolvedValue({ platform_role: "owner" }); saveVersion.mockReset(); });
+afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); consumeLimit.mockReset().mockResolvedValue({ allowed: true, retryAfterSeconds: 60 }); withLock.mockReset().mockImplementation(async (_key: string, operation: () => Promise<unknown>) => ({ acquired: true, value: await operation() })); getApplication.mockReset().mockResolvedValue({ platform_role: "owner" }); saveVersion.mockReset(); });
 
 describe("Studio Builder route", () => {
   it("returns a deterministic valid artifact for a same-origin bounded request", async () => {
@@ -49,6 +50,19 @@ describe("Studio Builder route", () => {
     const response = await POST(request(payload));
 
     expect(response.status).toBe(403);
+    expect(generate).not.toHaveBeenCalled();
+  });
+
+  it("returns a retryable response when another build is already running for the account", async () => {
+    vi.stubEnv("BUILDLOOP_ENVIRONMENT", "preview");
+    vi.stubEnv("BUILDLOOP_BUILDER_MODE", "deterministic");
+    withLock.mockResolvedValueOnce({ acquired: false });
+    const generate = vi.spyOn(deterministicBuilder, "generate");
+
+    const response = await POST(request(payload));
+
+    expect(response.status).toBe(429);
+    expect(response.headers.get("retry-after")).toBe("5");
     expect(generate).not.toHaveBeenCalled();
   });
 

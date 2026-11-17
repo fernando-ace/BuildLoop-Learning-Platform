@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { query } = vi.hoisted(() => ({ query: vi.fn() }));
-vi.mock("./database", () => ({ getPlatformPool: () => ({ query }) }));
+const { query, clientQuery, release } = vi.hoisted(() => ({ query: vi.fn(), clientQuery: vi.fn(), release: vi.fn() }));
+vi.mock("./database", () => ({ getPlatformPool: () => ({ query, connect: async () => ({ query: clientQuery, release }) }) }));
 
-import { consumeOperationLimit, operationLimitResponse } from "./rate-limit";
+import { consumeOperationLimit, operationLimitResponse, withOperationLock } from "./rate-limit";
 
 describe("shared operation rate limits", () => {
-  beforeEach(() => query.mockReset());
+  beforeEach(() => { query.mockReset(); clientQuery.mockReset(); release.mockReset(); });
   afterEach(() => vi.unstubAllEnvs());
 
   it("consumes a fixed-window quota with one atomic PostgreSQL upsert", async () => {
@@ -42,5 +42,31 @@ describe("shared operation rate limits", () => {
     vi.stubEnv("BUILDLOOP_AUTH_MODE", "test");
     expect(await operationLimitResponse("app-create:user-1", 5, 60, "Try later.")).toBeNull();
     expect(query).not.toHaveBeenCalled();
+  });
+
+  it("holds the shared account lock only around the operation", async () => {
+    clientQuery.mockResolvedValue({ rows: [{ acquired: true }] });
+    const operation = vi.fn().mockResolvedValue("built");
+    await expect(withOperationLock("builder:user-1", operation)).resolves.toEqual({ acquired: true, value: "built" });
+    expect(operation).toHaveBeenCalledOnce();
+    expect(clientQuery.mock.calls.map(([sql]) => sql)).toEqual(["BEGIN", expect.stringContaining("pg_try_advisory_xact_lock"), "COMMIT"]);
+    expect(release).toHaveBeenCalledOnce();
+  });
+
+  it("skips a concurrent operation and rolls back its transaction", async () => {
+    clientQuery.mockResolvedValueOnce({ rows: [] }).mockResolvedValueOnce({ rows: [{ acquired: false }] }).mockResolvedValueOnce({ rows: [] });
+    const operation = vi.fn();
+    await expect(withOperationLock("builder:user-1", operation)).resolves.toEqual({ acquired: false });
+    expect(operation).not.toHaveBeenCalled();
+    expect(clientQuery).toHaveBeenLastCalledWith("ROLLBACK");
+    expect(release).toHaveBeenCalledOnce();
+  });
+
+  it("rolls back and releases the lock when the operation fails", async () => {
+    clientQuery.mockResolvedValue({ rows: [{ acquired: true }] });
+    const operation = vi.fn().mockRejectedValue(new Error("provider failed"));
+    await expect(withOperationLock("builder:user-1", operation)).rejects.toThrow("provider failed");
+    expect(clientQuery).toHaveBeenLastCalledWith("ROLLBACK");
+    expect(release).toHaveBeenCalledOnce();
   });
 });
