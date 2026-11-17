@@ -133,6 +133,7 @@ test("Mission 2 happy path builds, tests, iterates, retests, and persists the su
   await expect(page.getByRole("heading", { name: "Jordan’s task works now." })).toBeVisible();
   await page.getByRole("button", { name: /Ship the focused first version/ }).click();
   await expect(page.getByRole("heading", { name: "You shipped a better brief." })).toBeVisible();
+  await expect(page.getByText("MISSION COMPLETE · ATTEMPT 1")).toBeVisible();
   await expect(page.getByText(/What version 1 got wrong/)).toBeVisible();
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("buildloop-learner-v2") || "{}"));
   expect(saved.mission2Progress.completed).toBe(true);
