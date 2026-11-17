@@ -6,7 +6,7 @@ Updated 2026-11-17. This report tracks the Goal 15 branch only. It does not auth
 
 **Goal 15 status: PARTIALLY_COMPLETE; public beta verdict: NOT_READY.**
 
-A protected Vercel Preview is now available. Goal 15's latest branch commit, `2899259`, was pushed and deployed through Git integration to Preview deployment `dpl_HoNkKDGyTEtuFeDe2NcjKHoQNmha` (`https://buildloop-learning-platform-pg92qxuty.vercel.app`). Its home page and live/ready health checks returned 200; readiness reports database `ok`, migration journal `current`, authentication `configured`, and email, Builder, and monitoring `unavailable`. Full authenticated hosted testing still requires an interactive browser session. No Goal 15 Production deployment, promotion, alias, or protection change was made.
+A protected Vercel Preview is now available. The signup fix in commit `2899259` was deployed through Git integration and its home page and live/ready health checks returned 200. The latest branch commit, `995f2fb` (documentation-only follow-up), is READY at deployment `dpl_DFRv2573yALDwZM8gPCkfpTDd4SS` (`https://buildloop-learning-platform-aknxr5kga.vercel.app`); its liveness and readiness checks returned 200 and report the expected release SHA. Readiness reports database `ok`, migration journal `current`, authentication `configured`, and email, Builder, and monitoring `unavailable`. Full authenticated hosted testing still requires an interactive browser session. No Goal 15 Production deployment, promotion, alias, or protection change was made.
 
 ## Starting point
 
@@ -52,13 +52,13 @@ Request IDs accept only bounded safe characters, are included with platform erro
 
 ## Hosted verification and blockers
 
-Vercel's current project state differs from the Goal 14 report. Read-only Vercel project inspection confirms the Hobby team, the GitHub link to this repository, `master` as the Production branch, and SSO protection enabled for deployments. Pushing `goal-15-public-beta-readiness` created protected Preview deployments for commits `736ace8` and `2899259`, each with a non-Production target. The latest is deployment `dpl_HoNkKDGyTEtuFeDe2NcjKHoQNmha`, state `READY`, URL `https://buildloop-learning-platform-pg92qxuty.vercel.app`, exact SHA `2899259f8213fc7f2f0bbb29ad018b247b7c6927`. A separate Production-target deployment record was created before Goal 15 began; the project reports `live=false` and no domains. Goal 15 did not create, modify, promote, alias, or change protection on that record.
+Vercel's current project state differs from the Goal 14 report. Read-only Vercel project inspection confirms the Hobby team, the GitHub link to this repository, `master` as the Production branch, and SSO protection enabled for deployments. Pushing `goal-15-public-beta-readiness` created protected Preview deployments for commits `736ace8`, `2899259`, and `995f2fb`, each with a non-Production target. The latest is deployment `dpl_DFRv2573yALDwZM8gPCkfpTDd4SS`, state `READY`, URL `https://buildloop-learning-platform-aknxr5kga.vercel.app`, exact SHA `995f2fb4a1d7beb9ff038bb9ecb2a4a0b5b2317c`; it contains only documentation changes on top of the application code validated in `2899259`. A separate Production-target deployment record was created before Goal 15 began; the project reports `live=false` and no domains. Goal 15 did not create, modify, promote, alias, or change protection on that record.
 
-Hosted checks on commit `2899259`:
+Hosted checks on application commit `2899259` and latest Preview commit `995f2fb`:
 
 - `GET /`: 200; BuildLoop page title present.
-- `GET /api/health/live`: 200; response reports `environment=preview` and release `2899259f8213fc7f2f0bbb29ad018b247b7c6927`.
-- `GET /api/health/ready`: 200; response reports database and migration journal `ok`/`current`, authentication `configured`; email, Builder, and monitoring are `unavailable`. Response request ID: `9497a720-921b-42c7-b237-62ca004435d7`.
+- On `2899259`: `GET /`: 200 with BuildLoop page title; live and ready endpoints returned 200 with release `2899259f8213fc7f2f0bbb29ad018b247b7c6927`.
+- On latest `995f2fb`: live and ready endpoints returned 200 with release `995f2fb4a1d7beb9ff038bb9ecb2a4a0b5b2317c`. Readiness reports database and migration journal `ok`/`current`, authentication `configured`; email, Builder, and monitoring are `unavailable`. Response request ID: `3d0fb465-e1bb-44d6-bb6b-c62b29adb2e8`.
 - Follow-up protected API fetches through the Vercel tool stopped at a Vercel authentication redirect (401), so they did not establish application-level session behavior.
 
 The local browser harness could not run interactive hosted tests: its diagnostic reported no Chrome process and no real page. Its setup instructions require Chrome to be open for a local authenticated browser session. No cloud browser was used because it would exceed the $0 constraint. Therefore hosted independent-account Mission/Studio persistence, invitations, publishing, rollback, and cleanup remain unverified. The signup correction is included in the latest hosted Preview build, though its browser behavior was verified only locally with a mocked signup response.
