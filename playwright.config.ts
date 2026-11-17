@@ -17,7 +17,8 @@ export default defineConfig({
     reuseExistingServer: false,
     timeout: 120_000,
     env: {
-      BUILDLOOP_ENVIRONMENT: "development",
+      BUILDLOOP_ENVIRONMENT: process.env.BUILDLOOP_ENVIRONMENT ?? "development",
+      BUILDLOOP_PREVIEW_ALLOW_UNVERIFIED_SIGNUPS: process.env.BUILDLOOP_PREVIEW_ALLOW_UNVERIFIED_SIGNUPS ?? "",
       BUILDLOOP_RELEASE: "local-e2e",
       BUILDLOOP_BUILDER_MODE: "deterministic",
       BUILDLOOP_AUTH_MODE: "test",

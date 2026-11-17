@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { afterAll, afterEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 import { POST } from "./[...all]/route";
 import { getPlatformIdentity } from "@/lib/platform/session";
 import { closePlatformDatabase, getPlatformPool } from "@/lib/platform/database";
@@ -25,12 +25,25 @@ describe.skipIf(!enabled)("Better Auth PostgreSQL session", () => {
   afterAll(async () => { await closePlatformDatabase(); });
 
   it("creates a real account, resolves its stable identity from a session cookie, and invalidates logout", async () => {
+    vi.stubEnv("BUILDLOOP_ENVIRONMENT", "preview");
+    vi.stubEnv("VERCEL_ENV", "preview");
+    vi.stubEnv("VERCEL_URL", "");
+    vi.stubEnv("BUILDLOOP_PREVIEW_ALLOW_UNVERIFIED_SIGNUPS", "1");
+    vi.stubEnv("PUBLIC_APP_URL", "http://localhost:3000");
+    vi.stubEnv("BETTER_AUTH_URL", "http://localhost:3000");
     const email = `auth-${randomUUID()}@example.test`;
     testEmails.push(email);
     const signUp = await POST(request("sign-up/email", "POST", { name: "Browser User", email, password: "A-real-test-password-394!" }));
     expect(signUp.status).toBe(200);
-    const cookie = signUp.headers.getSetCookie().map((value) => value.split(";")[0]).join("; ");
-    expect(cookie).toContain("buildloop.session_token=");
+    const signUpBody: unknown = await signUp.json();
+    const token = typeof signUpBody === "object" && signUpBody !== null && "token" in signUpBody ? signUpBody.token : undefined;
+    expect(token ?? null).toBeNull();
+    expect(signUp.headers.getSetCookie().join(";")).not.toContain("session_token=");
+
+    const signIn = await POST(request("sign-in/email", "POST", { email, password: "A-real-test-password-394!" }));
+    expect(signIn.status).toBe(200);
+    const cookie = signIn.headers.getSetCookie().map((value) => value.split(";")[0]).join("; ");
+    expect(cookie).toMatch(/(?:__Secure-)?buildloop\.session_token=/);
 
     const identity = await getPlatformIdentity(request("get-session", "GET", undefined, cookie));
     expect(identity).toMatchObject({ name: "Browser User", email });
