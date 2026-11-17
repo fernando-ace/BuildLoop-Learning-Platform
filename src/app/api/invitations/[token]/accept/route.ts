@@ -10,5 +10,5 @@ export async function POST(request: Request, context: Context) {
     const user = await requireIdentity(request);
     const { token } = await context.params;
     return Response.json({ invitation: await getPlatformRepository().acceptInvitation(user, token) }, { headers: { "Cache-Control": "no-store" } });
-  } catch (error) { return responseForPlatformError(error); }
+  } catch (error) { return responseForPlatformError(error, request); }
 }

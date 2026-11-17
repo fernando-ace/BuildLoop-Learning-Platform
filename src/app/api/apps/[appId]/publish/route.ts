@@ -18,7 +18,7 @@ export async function GET(request: Request, context: Context) {
       versions: await repository.listVersions(user.id, appId),
       history: await repository.listPublicationHistory(user.id, appId),
     }, { headers: { "Cache-Control": "no-store" } });
-  } catch (error) { return responseForPlatformError(error); }
+  } catch (error) { return responseForPlatformError(error, request); }
 }
 
 export async function POST(request: Request, context: Context) {
@@ -45,6 +45,6 @@ export async function POST(request: Request, context: Context) {
       const result = error.code === "conflict" && error.message.includes("Production changed") ? 409 : 422;
       return Response.json({ error: error.message, code: error.code }, { status: result, headers: { "Cache-Control": "no-store" } });
     }
-    return responseForPlatformError(error);
+    return responseForPlatformError(error, request);
   }
 }

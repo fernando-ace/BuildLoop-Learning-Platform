@@ -9,5 +9,5 @@ export async function GET(request: Request, context: Context) {
     const user = await requireIdentity(request);
     const { appId } = await context.params;
     return Response.json({ events: await getPlatformRepository().listActivity(user.id, appId) }, { headers: { "Cache-Control": "no-store" } });
-  } catch (error) { return responseForPlatformError(error); }
+  } catch (error) { return responseForPlatformError(error, request); }
 }

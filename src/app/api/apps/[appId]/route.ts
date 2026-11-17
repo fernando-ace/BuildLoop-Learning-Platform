@@ -11,7 +11,7 @@ export async function GET(request: Request, context: Context) {
     const { appId } = await context.params;
     const environment = new URL(request.url).searchParams.get("environment") === "preview" ? "preview" : "production";
     return Response.json(await getPlatformRepository().readRuntime(user, appId, environment), { headers: { "Cache-Control": "no-store" } });
-  } catch (error) { return responseForPlatformError(error); }
+  } catch (error) { return responseForPlatformError(error, request); }
 }
 
 export async function POST(request: Request, context: Context) {
@@ -27,7 +27,7 @@ export async function POST(request: Request, context: Context) {
     const result = await getPlatformRepository().mutateRuntime(user, appId, body.operation as never, body.versionId, body.environment === "preview" ? "preview" : "production");
     return Response.json({ ok: true, ...result }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
-    if (error instanceof PlatformError) return responseForPlatformError(error);
+    if (error instanceof PlatformError) return responseForPlatformError(error, request);
     return Response.json({ error: "The change could not be saved. Refresh the app and try again." }, { status: 500, headers: { "Cache-Control": "no-store" } });
   }
 }

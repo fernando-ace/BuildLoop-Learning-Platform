@@ -9,7 +9,7 @@ export async function GET(request: Request, context: Context) {
     const user = await requireIdentity(request);
     const { appId } = await context.params;
     return Response.json({ members: await getPlatformRepository().listMembers(user.id, appId) }, { headers: { "Cache-Control": "no-store" } });
-  } catch (error) { return responseForPlatformError(error); }
+  } catch (error) { return responseForPlatformError(error, request); }
 }
 
 export async function PATCH(request: Request, context: Context) {
@@ -22,7 +22,7 @@ export async function PATCH(request: Request, context: Context) {
     if (body.platformRole === "administrator" || body.platformRole === "member") await getPlatformRepository().changePlatformRole(user, appId, body.memberId, body.platformRole);
     else await getPlatformRepository().changeAppRole(user, appId, body.memberId, body.appRole as string);
     return Response.json({ ok: true }, { headers: { "Cache-Control": "no-store" } });
-  } catch (error) { return responseForPlatformError(error); }
+  } catch (error) { return responseForPlatformError(error, request); }
 }
 
 export async function DELETE(request: Request, context: Context) {
@@ -34,5 +34,5 @@ export async function DELETE(request: Request, context: Context) {
     const { appId } = await context.params;
     await getPlatformRepository().removeMember(user, appId, body.memberId);
     return Response.json({ ok: true }, { headers: { "Cache-Control": "no-store" } });
-  } catch (error) { return responseForPlatformError(error); }
+  } catch (error) { return responseForPlatformError(error, request); }
 }
