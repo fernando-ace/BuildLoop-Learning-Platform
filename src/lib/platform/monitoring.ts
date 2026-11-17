@@ -1,6 +1,6 @@
 import type { Event } from "@sentry/core";
 
-export function scrubMonitoringEvent(event: Event): Event {
+export function scrubMonitoringEvent<T extends Event>(event: T): T {
   if (!event || typeof event !== "object") return event;
   if (event.request) {
     delete event.request.data;
