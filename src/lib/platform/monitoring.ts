@@ -1,31 +1,38 @@
-export function scrubMonitoringEvent<T>(event: T): T {
+import type { Event } from "@sentry/core";
+
+export function scrubMonitoringEvent(event: Event): Event {
   if (!event || typeof event !== "object") return event;
-  const mutable = event as { request?: { [key: string]: unknown }; breadcrumbs?: unknown[]; extra?: unknown; user?: unknown; message?: string; transaction?: string; logentry?: { [key: string]: unknown }; exception?: { values?: Array<{ value?: string }> } };
-  if (mutable.request) {
-    delete mutable.request.data;
-    delete mutable.request.cookies;
-    delete mutable.request.headers;
-    delete mutable.request.query_string;
-    const rawUrl = mutable.request.url;
+  if (event.request) {
+    delete event.request.data;
+    delete event.request.cookies;
+    delete event.request.headers;
+    delete event.request.query_string;
+    delete event.request.env;
+    const rawUrl = event.request.url;
     if (typeof rawUrl === "string") {
       try {
         const url = new URL(rawUrl);
         url.pathname = url.pathname.replace(/^\/invite\/[^/]+/, "/invite/[redacted]");
-        mutable.request.url = url.origin + url.pathname;
-      } catch { mutable.request.url = "[redacted]"; }
+        event.request.url = url.origin + url.pathname;
+      } catch { event.request.url = "[redacted]"; }
     }
   }
-  if (mutable.breadcrumbs) mutable.breadcrumbs = mutable.breadcrumbs.map((breadcrumb) => {
+  if (event.breadcrumbs) event.breadcrumbs = event.breadcrumbs.map((breadcrumb) => {
     if (!breadcrumb || typeof breadcrumb !== "object") return {};
-    const item = breadcrumb as Record<string, unknown>;
+    const item = breadcrumb;
     return { category: item.category, timestamp: item.timestamp, type: item.type, level: item.level };
   });
-  if (mutable.transaction) mutable.transaction = mutable.transaction.replace(/^\/invite\/[^/]+/, "/invite/[redacted]");
-  if (mutable.message) mutable.message = "BuildLoop runtime error";
-  if (mutable.logentry?.message) mutable.logentry.message = "BuildLoop runtime error";
-  if (mutable.exception?.values) for (const value of mutable.exception.values) value.value = "BuildLoop runtime error";
-  delete mutable.extra;
-  delete mutable.user;
+  if (event.transaction) {
+    event.transaction = event.transaction
+      .split(/[?#]/, 1)[0]
+      .replace(/(\/invite\/)[^/]+/g, "$1[redacted]");
+  }
+  if (event.message) event.message = "BuildLoop runtime error";
+  if (event.logentry?.message) event.logentry.message = "BuildLoop runtime error";
+  if (event.logentry) delete event.logentry.params;
+  if (event.exception?.values) for (const value of event.exception.values) value.value = "BuildLoop runtime error";
+  delete event.extra;
+  delete event.user;
   return event;
 }
 
