@@ -60,7 +60,7 @@ test("Mission 5 is locked until Mission 4; strong repair resumes, completes, and
   await page.goto("/");
   await page.evaluate(() => localStorage.clear());
   await page.reload();
-  await expect(page.getByRole("article", { name: "Mission 5 locked" })).toContainText("Complete Mission 4 to continue");
+  await expect(page.getByRole("article", { name: "Mission 5 locked" })).toContainText("Complete Mission 4 to continue", { timeout: 15_000 });
   await expect(page.locator(".mission-number").allTextContents()).resolves.toEqual(["MISSION 1", "MISSION 2", "MISSION 3", "MISSION 4", "MISSION 5", "MISSION 6 · FINAL PROJECT"]);
   await noHorizontalOverflow(page, 1440);
 

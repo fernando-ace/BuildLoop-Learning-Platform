@@ -40,6 +40,7 @@ describe("invitation email", () => {
 
   it("fails required account actions when email is unconfigured or the provider rejects delivery", async () => {
     vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("BUILDLOOP_ENVIRONMENT", "development");
     vi.stubEnv("PUBLIC_APP_URL", "http://localhost:3000");
     vi.stubEnv("RESEND_API_KEY", ""); vi.stubEnv("EMAIL_FROM", "");
     await expect(sendRequiredAccountActionEmail(accountAction)).rejects.toThrow("could not deliver the account email");
