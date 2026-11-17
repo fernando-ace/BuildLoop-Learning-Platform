@@ -23,6 +23,10 @@ export async function POST(request: Request) {
     try {
       const quota = await consumeOperationLimit(`builder:${identity.id}`, 5, 60);
       if (!quota.allowed) return Response.json({ error: "Too many builds just now. Wait a minute and try again." }, { status: 429, headers: { "Retry-After": String(quota.retryAfterSeconds), "Cache-Control": "no-store" } });
+      const dailyLimit = Number(process.env.BUILDLOOP_BUILDER_DAILY_LIMIT ?? 10);
+      if (!Number.isInteger(dailyLimit) || dailyLimit < 1 || dailyLimit > 100) throw new Error("BUILDLOOP_BUILDER_DAILY_LIMIT must be an integer from 1 to 100.");
+      const dailyQuota = await consumeOperationLimit(`builder-daily:${identity.id}`, dailyLimit, 86_400);
+      if (!dailyQuota.allowed) return Response.json({ error: "You have reached today's build limit. Try again tomorrow." }, { status: 429, headers: { "Retry-After": String(dailyQuota.retryAfterSeconds), "Cache-Control": "no-store" } });
     } catch {
       return Response.json({ error: "The Builder is temporarily unavailable. Try again shortly." }, { status: 503, headers: { "Cache-Control": "no-store" } });
     }

@@ -76,6 +76,27 @@ describe("Studio Builder route", () => {
     expect(response.status).toBe(429);
     expect(response.headers.get("retry-after")).toBe("23");
     expect(consumeLimit).toHaveBeenCalledWith("builder:test-owner", 5, 60);
+    expect(consumeLimit).toHaveBeenCalledWith("builder-daily:test-owner", 10, 86_400);
+  });
+
+  it("enforces a bounded shared daily account build quota", async () => {
+    vi.stubEnv("BUILDLOOP_ENVIRONMENT", "preview");
+    vi.stubEnv("BUILDLOOP_BUILDER_MODE", "openai"); vi.stubEnv("OPENAI_API_KEY", "");
+    consumeLimit.mockResolvedValueOnce({ allowed: true, retryAfterSeconds: 60 }).mockResolvedValueOnce({ allowed: false, retryAfterSeconds: 3600 });
+
+    const response = await POST(request(payload));
+
+    expect(response.status).toBe(429);
+    expect(response.headers.get("retry-after")).toBe("3600");
+    expect((await response.json()).error).toContain("today's build limit");
+    expect(consumeLimit).toHaveBeenNthCalledWith(2, "builder-daily:test-owner", 10, 86_400);
+  });
+
+  it("fails closed when the configured daily build limit is invalid", async () => {
+    vi.stubEnv("BUILDLOOP_ENVIRONMENT", "preview");
+    vi.stubEnv("BUILDLOOP_BUILDER_DAILY_LIMIT", "101");
+    const response = await POST(request(payload));
+    expect(response.status).toBe(503);
   });
 
   it("keeps deterministic mode test-only and never lets it bypass hosted quotas", async () => {
