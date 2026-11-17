@@ -2,7 +2,11 @@
 
 ## Goal 14 staging target
 
-Goal 14 staging is a noncommercial Vercel Preview deployment of the existing `buildloop-learning-platform` project using a dedicated Neon Free database. It must remain behind Vercel Authentication. Do not connect a custom domain, use a production deployment, or enable paid add-ons. Confirm the project remains on a $0 plan before provisioning any provider resource.
+The current staging investigation evaluates a private Netlify Free draft deploy backed by the existing Neon Free database. It does not change or deploy the existing Vercel project. See [NETLIFY_STAGING_ASSESSMENT.md](./NETLIFY_STAGING_ASSESSMENT.md) for verified compatibility, access controls, the draft-only procedure, validation evidence, and the current human action required before deployment.
+
+The prior Vercel material below is retained as historical project context only. It is not an instruction to deploy to Vercel; the first-deployment restriction is confirmed and no further Vercel deployment attempts are authorized.
+
+## Historical Vercel project context (superseded; read only)
 
 Vercel project ID: `prj_0WDtrIFOTYSHxeYHqfC4RPEIQCPl`
 
