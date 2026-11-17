@@ -5,7 +5,7 @@ This checklist separates code evidence from provider setup and launch approval. 
 ## Automated technical verification
 
 - [x] TypeScript typecheck, lint, full unit suite, PostgreSQL integration suite, Playwright suite, production build, and `git diff --check` pass on the release candidate. Current counts and scope: [Goal 15 evidence](GOAL15_EVIDENCE.md#executed-checks).
-- [ ] Dependency audit is clean. Latest `npm audit --audit-level=high` reports 14 high-severity findings through `picomatch` (advisory through 4.0.7). No compatible fixed release is available; `npm audit fix` failed and no forced breaking downgrade was applied. Resolve this advisory before public beta.
+- [ ] Dependency audit is clean. Latest `npm audit --audit-level=high` reports 14 high-severity findings, with 8 remaining under `--omit=dev`, through `picomatch` (advisory through 4.0.7). The upstream fix is still an open, unreleased PR; `npm audit fix` failed and suggested remedies require breaking downgrades. Runtime reachability is unverified. Resolve or formally reassess this advisory before public beta.
 - [x] Database migration journal check passes; the current migration set is present in the isolated Preview database. No Production migration was run.
 - [x] Email verification and reset-link flows, invitation acceptance/expiration, invalid and reused tokens, abuse limits, delivery failures, and test capture are covered without sending real messages. These tests do not establish live delivery.
 - [x] Builder authorization precedes provider calls; schema/safety validation, request bounds, rate limits, usage/concurrency limits, safe errors, and unavailable-provider behavior are tested with mocks.
