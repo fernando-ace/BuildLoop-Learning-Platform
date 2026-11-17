@@ -16,13 +16,13 @@ GitHub's default and Vercel Production branch is `master`. The project's ignored
 
 ## One-time private bootstrap
 
-Vercel requires the first deployment record to be Production-classified. Goal 14 explicitly authorizes one bootstrap for that purpose, only after rechecking the Hobby account, zero deployment count, enabled Vercel Authentication, `all_except_custom_domains` scope, no custom domains, no Production environment variables, and a clean reviewed Goal 14 commit. Run exactly once:
+Vercel requires the first deployment record to be Production-classified. Goal 14 explicitly authorizes one bootstrap for that purpose, only after rechecking the Hobby account, zero deployment count, enabled Vercel Authentication, `all_except_custom_domains` (Standard Protection) scope, no custom domains, no Production environment variables, and a clean reviewed Goal 14 commit. [Standard Protection](https://vercel.com/docs/deployment-protection) covers deployment and Preview URLs but not Production-domain aliases. Run exactly once:
 
 ```powershell
 vercel deploy --prod --skip-domain --yes
 ```
 
-Do not use `--verify` or any protection bypass. Confirm the result is protected from unauthenticated requests and has no domain alias before continuing. If it fails, stop and inspect the project state; do not retry. The bootstrap is not a functional app deployment because Production environment variables remain unset. Do not assign a Production domain or send production traffic to it.
+Do not use `--verify` or any protection bypass. Confirm the result is protected from unauthenticated requests, has no alias or `productionUrl`, the project remains not live, and the stable `vercel.app` project domain has no deployment (404) before continuing. If any check fails, stop and inspect the project state; do not retry. The bootstrap is not a functional app deployment because Production environment variables remain unset. Do not assign a Production domain or send production traffic to it. Vercel Authentication's `all` scope can protect all domains on Hobby, but this project setting is not changed as part of Goal 14.
 
 ## Database setup
 
@@ -55,6 +55,10 @@ Verify the actual commit SHA, generated `vercel.app` URL, Vercel Authentication 
 ## Production
 
 The bootstrap deployment is intentionally nonfunctional because no Production environment variables are configured; it is only the Vercel first-deployment record. Production activation is outside the authorized Goal 14 staging scope. Before a later production release, provision a separate managed database, configure verified email delivery, live Builder credentials, both Sentry DSNs, backups/restore, production origins, and required hosting protection. Require all production readiness checks and the full launch checklist in `GOAL14_EVIDENCE.md`; apply production migrations only through the explicit protected release step.
+
+## Hobby usage and cost limits
+
+The linked Vercel team is on Hobby, a $0 plan without a billing cycle. Current documented limits include 100 deployments/day, a 2-vCPU/8-GB build machine, 64-GB build disk, and a 300-second function maximum. Included monthly usage includes 1 million function invocations, 100 GB-hours of function duration, 4 CPU-hours of active function compute, and 360 GB-hours of provisioned function memory. Exceeding a Hobby limit generally pauses that feature until its reset period rather than billing overage; Web Analytics can pause for seven days. Do not start a Pro trial or enable a paid feature. Recheck current usage in the Vercel dashboard before a large test run. See [Vercel Hobby plan and limits](https://vercel.com/docs/plans/hobby).
 
 ## Rollback and recovery
 
