@@ -53,9 +53,14 @@ export async function POST(request: Request) {
     feedback: feedbackRows as BuilderRequest["feedback"],
   };
   try {
+    const repository = getPlatformRepository();
+    const application = await repository.getApplication(identity.id, value.appId);
+    if (application.platform_role !== "owner" && application.platform_role !== "administrator") {
+      throw new PlatformError("forbidden", "An app owner or administrator must do that.");
+    }
     const result = await getBuilder().generate(safe);
     if (!(process.env.NODE_ENV === "test" && process.env.BUILDLOOP_TEST_DB_PERSISTENCE !== "1")) {
-      await getPlatformRepository().saveVersion(identity, value.appId, safe.version, result.artifact, { provider: result.provider, attempts: result.attempts, projectName: project.name });
+      await repository.saveVersion(identity, value.appId, safe.version, result.artifact, { provider: result.provider, attempts: result.attempts, projectName: project.name });
     }
     return Response.json(result, { headers: { "Cache-Control": "no-store" } });
   }

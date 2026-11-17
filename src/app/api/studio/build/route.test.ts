@@ -1,9 +1,15 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { POST } from "./route";
 import { issueTestSession, testCookieName } from "@/lib/platform/session";
+import { deterministicBuilder } from "@/lib/builder/provider";
 
-const { consumeLimit } = vi.hoisted(() => ({ consumeLimit: vi.fn() }));
+const { consumeLimit, getApplication, saveVersion } = vi.hoisted(() => ({ consumeLimit: vi.fn(), getApplication: vi.fn(), saveVersion: vi.fn() }));
+getApplication.mockResolvedValue({ platform_role: "owner" });
 vi.mock("@/lib/platform/rate-limit", () => ({ consumeOperationLimit: consumeLimit }));
+vi.mock("@/lib/platform/repository", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@/lib/platform/repository")>(),
+  getPlatformRepository: () => ({ getApplication, saveVersion }),
+}));
 
 const payload = { appId: "app_12345678-1234-1234-1234-123456789abc", project: { name: "Study tracker", user: "Students", problem: "They lose track of practice", why: "Study time matters", behavior: "Add a topic", constraints: "Phone friendly", inScope: ["Track a topic"], laterIdeas: ["Share with friends"] }, mode: "initial", version: 1, instruction: "Build a simple topic tracker", observations: [], feedback: [] };
 function request(body: unknown, headers: Record<string, string> = {}, url = "http://localhost/api/studio/build") {
@@ -12,7 +18,7 @@ function request(body: unknown, headers: Record<string, string> = {}, url = "htt
   return new Request(url, { method: "POST", headers: { host: "localhost", origin: "http://localhost", "content-type": "application/json", cookie, ...headers }, body: JSON.stringify(body) });
 }
 
-afterEach(() => { vi.unstubAllEnvs(); consumeLimit.mockReset().mockResolvedValue({ allowed: true, retryAfterSeconds: 60 }); });
+afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); consumeLimit.mockReset().mockResolvedValue({ allowed: true, retryAfterSeconds: 60 }); getApplication.mockReset().mockResolvedValue({ platform_role: "owner" }); saveVersion.mockReset(); });
 
 describe("Studio Builder route", () => {
   it("returns a deterministic valid artifact for a same-origin bounded request", async () => {
@@ -33,6 +39,17 @@ describe("Studio Builder route", () => {
   it("requires a trusted platform session before building", async () => {
     const unauthorized = new Request("http://localhost/api/studio/build", { method: "POST", headers: { host: "localhost", origin: "http://localhost", "content-type": "application/json" }, body: JSON.stringify(payload) });
     expect((await POST(unauthorized)).status).toBe(401);
+  });
+
+  it("rejects non-admin app members before invoking the Builder", async () => {
+    vi.stubEnv("BUILDLOOP_BUILDER_MODE", "deterministic");
+    getApplication.mockResolvedValueOnce({ platform_role: "member" });
+    const generate = vi.spyOn(deterministicBuilder, "generate");
+
+    const response = await POST(request(payload));
+
+    expect(response.status).toBe(403);
+    expect(generate).not.toHaveBeenCalled();
   });
 
   it("bounds serialized request size", async () => {
