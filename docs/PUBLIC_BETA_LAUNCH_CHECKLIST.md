@@ -5,7 +5,7 @@ This checklist separates code evidence from provider setup and launch approval. 
 ## Automated technical verification
 
 - [x] TypeScript typecheck, lint, full unit suite, PostgreSQL integration suite, Playwright suite, production build, and `git diff --check` pass on the release candidate. Current counts and scope: [Goal 15 evidence](GOAL15_EVIDENCE.md#executed-checks).
-- [ ] Dependency audit is clean. Latest `npm audit --audit-level=high` reports 14 high-severity findings, with 8 remaining under `--omit=dev`, through `picomatch` (advisory through 4.0.7). The upstream fix is still an open, unreleased PR; `npm audit fix` failed and suggested remedies require breaking downgrades. Runtime reachability is unverified. Resolve or formally reassess this advisory before public beta.
+- [ ] Dependency audit is clean. Latest `npm audit --audit-level=high` reports 14 high-severity findings, with 8 remaining under `--omit=dev`, through `picomatch` (advisory through 4.0.7). The upstream fix is still an open, unreleased PR; `npm audit fix` failed and suggested remedies require breaking downgrades. Current app source and 27 server trace manifests show no production request path to the matcher; Vite use is dev/test only. Keep this alert tracked and reassess when the upstream fix ships or dependencies/configuration change. See [Goal 15 evidence](GOAL15_EVIDENCE.md#executed-checks).
 - [x] Database migration journal check passes; the current migration set is present in the isolated Preview database. No Production migration was run.
 - [x] Email verification and reset-link flows, invitation acceptance/expiration, invalid and reused tokens, abuse limits, delivery failures, and test capture are covered without sending real messages. These tests do not establish live delivery.
 - [x] Builder authorization precedes provider calls; schema/safety validation, request bounds, rate limits, usage/concurrency limits, safe errors, and unavailable-provider behavior are tested with mocks.
@@ -14,7 +14,7 @@ This checklist separates code evidence from provider setup and launch approval. 
 - [x] Independent authenticated contexts verify persistence, account switching, logout, invitation acceptance, role enforcement, publishing, rollback, and cleanup against a protected hosted Preview. A separate hosted synthetic account verified Studio editing/autosave and account-copy conflict resolution; successful hosted Builder preview and shared-runtime UI remain open.
 - [ ] Liveness/readiness checks, structured redacted logs, correlation IDs, database failure diagnostics, provider failure diagnostics, and the operational smoke procedure are verified.
 - [x] Desktop and mobile core flows cover Missions 1–6, sign-in/recovery, Studio save/build/preview/publish/rollback, and actionable failure states in the local Playwright suite. Additional hosted mobile confirmation remains open.
-- [ ] No known unresolved critical/high findings remain. The dependency audit currently reports the unresolved high-severity `picomatch` advisory above; focused source review is not a full penetration test.
+- [x] No exploitable critical/high application path was identified in the focused review and hosted isolation tests. The package-level `picomatch` audit alert remains listed above; focused source review is not a full penetration test.
 
 ## Provider and account prerequisites
 
