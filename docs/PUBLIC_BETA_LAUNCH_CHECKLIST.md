@@ -4,16 +4,16 @@ This checklist separates code evidence from provider setup and launch approval. 
 
 ## Automated technical verification
 
-- [ ] TypeScript typecheck, lint, full unit suite, PostgreSQL integration suite, Playwright suite, production build, dependency audit, and `git diff --check` pass on the release candidate.
-- [ ] Database migration journal check passes; the exact migration set is reviewed and applied to an isolated Preview database before any Production migration.
-- [ ] Email verification, reset, invitations, expiration, invalid tokens, throttles, delivery failure, and test capture transport are covered without sending real messages.
-- [ ] Builder authorization precedes provider calls; schema/safety validation, request bounds, rate limits, usage/concurrency limits, safe errors, and unavailable-provider behavior are tested with mocks.
-- [ ] Generated artifacts remain inside the declarative runtime and permission model.
-- [ ] Tenant isolation and role enforcement tests cover reads and mutations, including publish, rollback, invitations, and app runtime operations.
-- [ ] Independent authenticated contexts verify persistence, account switching, logout, invitation acceptance, role enforcement, publishing, rollback, and cleanup against a protected hosted Preview.
+- [x] TypeScript typecheck, lint, full unit suite, PostgreSQL integration suite, Playwright suite, production build, dependency audit, and `git diff --check` pass on the release candidate. Current counts and scope: [Goal 15 evidence](GOAL15_EVIDENCE.md#executed-checks).
+- [x] Database migration journal check passes; the current migration set is present in the isolated Preview database. No Production migration was run.
+- [x] Email verification and reset-link flows, invitation acceptance/expiration, invalid and reused tokens, abuse limits, delivery failures, and test capture are covered without sending real messages. These tests do not establish live delivery.
+- [x] Builder authorization precedes provider calls; schema/safety validation, request bounds, rate limits, usage/concurrency limits, safe errors, and unavailable-provider behavior are tested with mocks.
+- [x] Generated artifacts remain inside the declarative runtime and permission model in the automated fixtures and runtime/browser coverage.
+- [x] Tenant isolation and role enforcement tests cover reads and mutations, including publish, rollback, invitations, and app runtime operations.
+- [x] Independent authenticated contexts verify persistence, account switching, logout, invitation acceptance, role enforcement, publishing, rollback, and cleanup against a protected hosted Preview. Hosted Studio editing and shared-runtime UI remain open.
 - [ ] Liveness/readiness checks, structured redacted logs, correlation IDs, database failure diagnostics, provider failure diagnostics, and the operational smoke procedure are verified.
-- [ ] Desktop and mobile core flows cover Missions 1–6, sign-in/recovery, Studio save/build/preview/publish/rollback, and actionable failure states.
-- [ ] Production build output and dependency audit contain no known unresolved critical/high findings.
+- [x] Desktop and mobile core flows cover Missions 1–6, sign-in/recovery, Studio save/build/preview/publish/rollback, and actionable failure states in the local Playwright suite. Additional hosted mobile confirmation remains open.
+- [x] Production build output and dependency audit contain no known unresolved critical/high findings. The audit reports zero vulnerabilities; focused source review is not a full penetration test.
 
 ## Provider and account prerequisites
 

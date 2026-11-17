@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
-import { POST } from "./[...all]/route";
+import { GET, POST } from "./[...all]/route";
 import { getPlatformIdentity } from "@/lib/platform/session";
 import { closePlatformDatabase, getPlatformPool } from "@/lib/platform/database";
 import { clearCapturedEmails, getCapturedEmails } from "@/lib/platform/email";
@@ -27,17 +27,46 @@ function request(path: string, method: string, body?: unknown, cookie?: string) 
   });
 }
 
-function configurePreviewAuth() {
+async function verifyCapturedAccountEmail(email: string) {
+  const message = getCapturedEmails().find((candidate) => candidate.subject === "Verify your BuildLoop email" && candidate.recipient === email);
+  if (!message) throw new Error("Expected the verification email to be captured in the test transport.");
+  const link = /Verify email: (https?:\/\/\S+)/.exec(message.text)?.[1];
+  if (!link) throw new Error("Expected the captured email to contain its verification link.");
+  const response = await GET(new Request(link, { headers: { host: "localhost:3000", origin: "http://localhost:3000" } }));
+  expect(response.status).toBe(302);
+  const verified = await getPlatformPool().query<{ email_verified: boolean }>("SELECT email_verified FROM platform_users WHERE email=$1", [email]);
+  expect(verified.rows[0]?.email_verified).toBe(true);
+}
+
+function configurePreviewAuth(allowUnverifiedSignups = false) {
+  vi.stubEnv("BETTER_AUTH_SECRET", "local-integration-secret-with-32-characters");
   vi.stubEnv("BUILDLOOP_ENVIRONMENT", "preview");
   vi.stubEnv("VERCEL_ENV", "preview");
   vi.stubEnv("VERCEL_URL", "");
-  vi.stubEnv("BUILDLOOP_PREVIEW_ALLOW_UNVERIFIED_SIGNUPS", "1");
+  vi.stubEnv("BUILDLOOP_PREVIEW_ALLOW_UNVERIFIED_SIGNUPS", allowUnverifiedSignups ? "1" : "");
   vi.stubEnv("PUBLIC_APP_URL", "http://localhost:3000");
   vi.stubEnv("BETTER_AUTH_URL", "http://localhost:3000");
 }
 
 describe.skipIf(!enabled)("Better Auth PostgreSQL session", () => {
   afterAll(async () => { await closePlatformDatabase(); });
+
+  it("verifies a new account through the captured email link before allowing sign-in", async () => {
+    configurePreviewAuth(false);
+    const email = `verify-${randomUUID()}@example.test`;
+    testEmails.push(email);
+    const signup = await POST(request("sign-up/email", "POST", { name: "Verification User", email, password: "Verification-password-394!" }));
+    expect(signup.status).toBe(200);
+    expect(await signup.json()).toMatchObject({ token: null });
+    expect(signup.headers.getSetCookie().join(";")).not.toContain("session_token=");
+
+    const user = await getPlatformPool().query<{ email_verified: boolean }>("SELECT email_verified FROM platform_users WHERE email=$1", [email]);
+    expect(user.rows[0]?.email_verified).toBe(false);
+    await verifyCapturedAccountEmail(email);
+
+    const signIn = await POST(request("sign-in/email", "POST", { email, password: "Verification-password-394!" }));
+    expect(signIn.status).toBe(200);
+  });
 
   it("creates a real account, resolves its stable identity from a session cookie, and invalidates logout", async () => {
     configurePreviewAuth();
@@ -49,6 +78,7 @@ describe.skipIf(!enabled)("Better Auth PostgreSQL session", () => {
     const token = typeof signUpBody === "object" && signUpBody !== null && "token" in signUpBody ? signUpBody.token : undefined;
     expect(token ?? null).toBeNull();
     expect(signUp.headers.getSetCookie().join(";")).not.toContain("session_token=");
+    await verifyCapturedAccountEmail(email);
 
     const signIn = await POST(request("sign-in/email", "POST", { email, password: "A-real-test-password-394!" }));
     expect(signIn.status).toBe(200);
@@ -72,6 +102,7 @@ describe.skipIf(!enabled)("Better Auth PostgreSQL session", () => {
     testEmails.push(email);
     const signup = await POST(request("sign-up/email", "POST", { name: "Reset User", email, password: "Initial-test-password-394!" }));
     expect(signup.status).toBe(200);
+    await verifyCapturedAccountEmail(email);
 
     const signIn = await POST(request("sign-in/email", "POST", { email, password: "Initial-test-password-394!" }));
     expect(signIn.status).toBe(200);
@@ -83,7 +114,7 @@ describe.skipIf(!enabled)("Better Auth PostgreSQL session", () => {
     const missingBody = await missingRequest.json();
     expect(missingRequest.status).toBe(200);
     expect(missingBody).toMatchObject({ status: true, message: "If this email exists in our system, check your email for the reset link" });
-    expect(getCapturedEmails()).toHaveLength(0);
+    expect(getCapturedEmails().some((message) => message.subject === "Reset your BuildLoop password")).toBe(false);
 
     const resetRequest = await POST(request("request-password-reset", "POST", { email, redirectTo }));
     expect(resetRequest.status).toBe(200);
