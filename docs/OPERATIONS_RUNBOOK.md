@@ -48,6 +48,8 @@ If safe overlap or provider verification is unavailable, stop before revoking th
 
 Use the hosting runtime logs and configured Sentry/error service as complementary signals. The application emits JSON event names, release/environment metadata, and limited diagnostic fields; provider DSN presence alone does not prove event delivery. A missing monitoring event is a release blocker until the test event is received and alert routing is confirmed.
 
+BuildLoop's `X-Request-Id` is included inside the JSON log message. Vercel's CLI `requestId:` filter matches Vercel's separate platform request ID, so search the application event and request ID as text instead, for example `vercel logs runtime --project <project-id> --deployment <deployment-id> --since 30m --query 'platform.request_rejected AND <app-request-id>' --scope <team-slug> --non-interactive`. On the current Hobby project, the CLI rejected a one-hour lookback as outside runtime-log retention; treat these logs as short-term diagnosis, not durable monitoring or alerting.
+
 For an incident, assign an incident owner, pause releases and risky data mutations, preserve timestamps/deployment identifiers/request IDs, classify impact, and communicate through the approved support channel. Do not include secrets or learner content in incident notes. Choose application rollback for code defects; use the isolated restore procedure for data loss. Record decisions, user impact, recovery evidence, and follow-up owners.
 
 ## Current Neon Free Preview limits

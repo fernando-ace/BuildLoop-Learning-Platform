@@ -17,7 +17,7 @@ This checklist separates code evidence from provider setup and launch approval. 
 
 ## Provider and account prerequisites
 
-- [ ] Vercel deployment path supports an SSO-protected Preview without a Production deployment; confirm deployment protection remains enabled.
+- [x] Vercel deployment path supports an SSO-protected Preview without a Goal 15 Production deployment; current project inspection confirms SSO protection remains enabled. See [hosted evidence](GOAL15_EVIDENCE.md#hosted-verification-and-blockers).
 - [ ] Production database is separate from Preview, uses TLS, has least-privilege credentials, and has automated backups and a successful isolated restore drill with agreed RPO/RTO.
 - [ ] Production `DATABASE_URL`, migration connection, `BETTER_AUTH_SECRET`, canonical HTTPS origins, and callback URLs are provisioned and verified in the secret manager.
 - [ ] Email provider is selected within the $0 approved limit; sender/domain is verified; delivery, bounce/failure handling, and recovery links are tested with controlled addresses.
