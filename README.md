@@ -46,7 +46,7 @@ When signed in, Mission checkpoints and skill/attempt history sync to a private 
 
 Studio now supports iterative declarative app evolution, compatible runtime-data preservation, structured schema comparison and migration planning, version-local historical state, and safe handling of incompatible values. Existing V1 apps and V2 artifacts remain readable; legacy V2 runtime maps are upgraded on their next save.
 
-See [docs/BUILDER-ARCHITECTURE.md](docs/BUILDER-ARCHITECTURE.md) for the provider boundary, artifact format, preview sandbox, validation, privacy and current limitations.
+See [docs/BUILDER-ARCHITECTURE.md](docs/BUILDER-ARCHITECTURE.md) for the provider boundary, artifact format, preview sandbox, validation, privacy and current limitations. See [docs/GOAL15_EVIDENCE.md](docs/GOAL15_EVIDENCE.md), [docs/PUBLIC_BETA_LAUNCH_CHECKLIST.md](docs/PUBLIC_BETA_LAUNCH_CHECKLIST.md), and [docs/OPERATIONS_RUNBOOK.md](docs/OPERATIONS_RUNBOOK.md) for beta readiness, operational procedures, and open release gates.
 
 ## Deterministic Builder mode
 
@@ -70,8 +70,8 @@ The Chromium suite covers all six Missions and Studio creation, brief coaching, 
 - Generated apps still cannot run arbitrary JavaScript, custom backend logic, realtime multiplayer, external APIs, deployment, or arbitrary npm packages. Test personas are limited to local Studio role previews; published app access uses real signed-in accounts and memberships.
 - Reference fields support one-way links between collections; this is not a general relational database.
 - The deterministic provider is a regression fixture selector, not evidence that a live model can design every brief well.
-- Mission state and Studio notes remain local to one browser and do not sync across devices. Platform data is PostgreSQL-backed and shareable across hosts that use the same database. This work did not deploy or verify a hosted production environment.
-- The live server provider keeps a process-local cap of five builds per minute per forwarded client address. The zero-cost deterministic test provider skips that cap. Production deployments with multiple instances should add a shared rate limiter before exposing paid generation broadly.
+- Mission progress and Studio learning records sync through the authenticated PostgreSQL platform when it is configured; browser-only saves remain available in development. Cross-device behavior still requires hosted account verification before public beta.
+- Hosted Builder requests use a PostgreSQL-backed per-account rate limit. Deterministic generation is restricted to development/test and does not establish live model quality or availability.
 - Production and Preview require email verification before sign-in and support password reset. Configure a verified `EMAIL_FROM` sender and `RESEND_API_KEY`; until then, those email actions are unavailable and new accounts cannot complete verification.
 - The Builder accepts up to 20 versions per project in this milestone.
 - OpenAI live generation requires a valid API key, enabled Responses API access, and a supported model. Deterministic test success is not evidence of live provider availability.

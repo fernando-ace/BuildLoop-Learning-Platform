@@ -1,6 +1,12 @@
 # Deployment guide
 
-## Goal 14 staging target
+## Goal 15 deployment boundary
+
+Goal 15 does not authorize a Production deployment, promotion, domain assignment, production secret provisioning, or production database migration. The Goal 14 bootstrap instructions below are historical and must not be executed for Goal 15. Goal 14's final evidence records that the project still had zero deployments and that explicit Preview requests were rejected because Vercel required a Production-classified first deployment. Do not use `--prod --skip-domain` to work around this. Keep SSO/deployment protection enabled. Hosted Preview verification remains blocked until Vercel supports a Preview deployment without crossing that boundary or a separately approved $0 staging route is established.
+
+The regular Vercel workflow normally creates Preview deployments from non-production branches and supports explicit Preview deployments through the CLI. The behavior observed for this project differs because it has no existing deployment record. Recheck the current Vercel project state and official [CLI deployment guidance](https://vercel.com/docs/projects/deploy-from-cli) before a future authorized staging attempt.
+
+## Goal 14 staging target (historical)
 
 Goal 14 uses the existing Vercel Hobby project and the dedicated Neon Free `buildloop-staging` database. The one-time Production-classified bootstrap is authorized only to satisfy Vercel's first-deployment restriction; it must remain protected and unaliased. All functional staging deployments use Preview. Do not attach a custom domain, promote a Preview, weaken protection, add Production secrets, or use paid services.
 
