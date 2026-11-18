@@ -1,4 +1,76 @@
-import { expect, test } from "@playwright/test";
+import { createHash } from "node:crypto";
+import { expect, test, type TestInfo } from "@playwright/test";
+import { initialLearnerProgress } from "../src/lib/learner";
+import { initialState } from "../src/lib/missions/the-missing-cameras";
+import { initialMission2Progress, initialMission2State } from "../src/lib/missions/the-vague-request";
+import { initialMission3Progress, initialMission3State } from "../src/lib/missions/one-prompt-wont-do-it";
+import { initialMission4Progress, initialMission4State } from "../src/lib/missions/what-next";
+import { initialMission5Progress, initialMission5State } from "../src/lib/missions/something-broken";
+import { initialMission6Progress, initialMission6State } from "../src/lib/missions/build-it-for-real";
+
+function authenticatedTestUserId(testInfo: TestInfo) {
+  return `e2e-owner-${createHash("sha256").update(testInfo.testId).digest("hex").slice(0, 16)}`;
+}
+
+test.describe("authenticated Mission progress sync", () => {
+  test.beforeEach(async ({ page }, testInfo) => {
+    const origin = "http://127.0.0.1:3107";
+    const userId = authenticatedTestUserId(testInfo);
+    const cleanup = await page.request.delete("/api/test-auth/session", { headers: { origin }, data: { cleanupUserIds: [userId] } });
+    expect(cleanup.ok(), await cleanup.text()).toBeTruthy();
+    const session = await page.request.post("/api/test-auth/session", { headers: { origin }, data: { userId } });
+    expect(session.ok(), await session.text()).toBeTruthy();
+  });
+
+  test.afterEach(async ({ page }, testInfo) => {
+    const cleanup = await page.request.delete("/api/test-auth/session", {
+      headers: { origin: "http://127.0.0.1:3107" },
+      data: { cleanupUserIds: [authenticatedTestUserId(testInfo)] },
+    });
+    expect(cleanup.ok(), await cleanup.text()).toBeTruthy();
+  });
+
+  test("cloud-synced Mission 3 completion unlocks and starts Mission 4", async ({ page }) => {
+    const origin = "http://127.0.0.1:3107";
+    const snapshot = {
+      activeMission: 0,
+      mission1State: { ...initialState, stage: 9, shipped: true },
+      mission1Progress: { ...initialLearnerProgress, completed: true, attempts: 1, currentAttempt: 1 },
+      mission2State: { ...initialMission2State, stage: 10 },
+      mission2Progress: { ...initialMission2Progress, completed: true },
+      mission2AttemptCount: 1,
+      mission3State: { ...initialMission3State, stage: 8 },
+      mission3Progress: { ...initialMission3Progress, completed: true },
+      mission4State: initialMission4State,
+      mission4Progress: initialMission4Progress,
+      mission5State: initialMission5State,
+      mission5Progress: initialMission5Progress,
+      mission6State: initialMission6State,
+      mission6Progress: initialMission6Progress,
+    };
+    const seeded = await page.request.put("/api/learner/progress", {
+      headers: { origin },
+      data: { expectedRevision: null, progress: snapshot },
+    });
+    expect(seeded.ok(), await seeded.text()).toBeTruthy();
+
+    await page.goto("/");
+    const mission4 = page.getByRole("article", { name: "Mission 4" });
+    const start = mission4.getByRole("button", { name: "Start Mission" });
+    await expect(start).toBeVisible({ timeout: 15_000 });
+    await start.click();
+    await expect(page.getByRole("heading", { name: "What should we build next?" })).toBeVisible();
+
+    const local = await page.evaluate(() => JSON.parse(localStorage.getItem("buildloop-learner-v2") ?? "null"));
+    expect(local).toMatchObject({ activeMission: 4, mission4State: { stage: 1 } });
+    await expect.poll(async () => {
+      const response = await page.request.get("/api/learner/progress", { headers: { origin } });
+      if (!response.ok()) return null;
+      const body = await response.json();
+      return body.progress;
+    }, { timeout: 5000 }).toMatchObject({ activeMission: 4, mission4State: expect.objectContaining({ stage: 1 }) });
+  });
+});
 
 async function seedMission3Complete(page: import("@playwright/test").Page) {
   await page.goto("/");
