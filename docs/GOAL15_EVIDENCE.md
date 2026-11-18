@@ -99,6 +99,8 @@ Authorized spend remains **$0**. The current Vercel team plan is Hobby. The inhe
 
 No Production deployment, promotion, or production database migration is performed by Goal 15.
 
+After the authenticated Mission 4 regression and evidence updates were pushed, Vercel's Preview-filtered deployment inventory returned exact branch-tip SHA `668907b7705d6cef4c6dae286df98de25a1d781f` as deployment `dpl_7xs2NGpWKbNGVat9CCN53zdafbuc`, state `READY`, URL `https://buildloop-learning-platform-2m3ea73lm.vercel.app`. This commit changes only E2E coverage and evidence documents; a ready deployment is not hosted UI validation. No Production-targeted deployment or promotion was created.
+
 ## Remaining steps before launch
 
 1. Verify remaining hosted mobile flows in independent sessions; hosted shared-runtime, Studio edit/save, and Builder-unavailable behavior are now verified, while successful hosted generation/preview still requires Builder configuration.
