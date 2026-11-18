@@ -119,4 +119,4 @@ The subsequent documentation-only branch tip `e557dd9dc10093648be05089f5dd8a954e
 4. Configure Sentry or another no-cost persistent monitoring target and verify a test event.
 5. Verify Neon plan/cost, backup and restore procedures, and production-specific configuration and callbacks.
 6. Verify successful Studio preview after Builder is configured; Missions 5–6 mobile workflows are now verified on the hosted Preview.
-7. Review the current changes in a PR. Do not merge, deploy to Production, promote, or weaken SSO as part of this goal.
+7. Open a review PR only after aligning the base branch: the current Goal 15 tip is based on the local Goal 14 implementation, while `origin/goal-14-production-readiness` is 91 commits behind this tip and `origin/master` is 128 commits behind it. A PR to either current remote base would sweep in substantial Goal 11–14 history, so no PR was opened. Do not merge, deploy to Production, promote, or weaken SSO as part of this goal.
