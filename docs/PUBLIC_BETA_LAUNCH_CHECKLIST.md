@@ -21,7 +21,7 @@ This checklist separates code evidence from provider setup and launch approval. 
 - [x] Vercel deployment path supports an SSO-protected Preview without a Goal 15 Production deployment; current project inspection confirms SSO protection remains enabled. See [hosted evidence](GOAL15_EVIDENCE.md#hosted-verification-and-blockers).
 - [ ] Production database is separate from Preview, uses TLS, has least-privilege credentials, and has automated backups and a successful isolated restore drill with agreed RPO/RTO.
 - [ ] Production `DATABASE_URL`, migration connection, `BETTER_AUTH_SECRET`, canonical HTTPS origins, and callback URLs are provisioned and verified in the secret manager.
-- [ ] Rotate the Preview `BETTER_AUTH_SECRET` flagged by Vercel as `readable-secret`, store the replacement with Secret visibility, redeploy, and verify sessions/sign-in. Preserve the current Preview config until the operator can safely coordinate rotation.
+- [ ] Review the nine Preview variables currently flagged by Vercel as `readable-secret` (`BETTER_AUTH_SECRET` and eight Neon integration variables); ensure sensitive values use Secret visibility, coordinate supported Neon credential rotation and Preview redeploy, then verify sign-in and database connectivity.
 - [ ] Email provider is selected within the $0 approved limit; sender/domain is verified; delivery, bounce/failure handling, and recovery links are tested with controlled addresses.
 - [ ] OpenAI API access has separately approved spend controls or a confirmed zero-charge arrangement; key is server-only; model and provider quotas are bounded.
 - [ ] Sentry or another approved no-cost monitoring path is configured; test event receipt and alert routing are verified.
