@@ -99,7 +99,11 @@ Authorized spend remains **$0**. The current Vercel team plan is Hobby. The inhe
 
 No Production deployment, promotion, or production database migration is performed by Goal 15.
 
+Vercel's Preview environment inventory returned a `readable-secret` security issue for `BETTER_AUTH_SECRET`. Vercel's current documentation distinguishes readable Config variables (`visibility: config`) from write-only Secret variables (`visibility: secret`); the secret value was not retrieved or included in this evidence. The existing Preview configuration was left untouched to preserve protected Preview functionality. Changing this variable to Secret requires resupplying its value, and rotating it can invalidate existing sessions; neither can be done safely without an authorized operator provisioning a new value and coordinating a Preview redeploy/session invalidation. Before launch, rotate this Preview auth secret, store it as a Secret, redeploy, and verify sign-in/session behavior. See [Vercel sensitive environment variables](https://vercel.com/docs/environment-variables/sensitive-environment-variables).
+
 After the authenticated Mission 4 regression and evidence updates were pushed, Vercel's Preview-filtered deployment inventory returned exact branch-tip SHA `668907b7705d6cef4c6dae286df98de25a1d781f` as deployment `dpl_7xs2NGpWKbNGVat9CCN53zdafbuc`, state `READY`, URL `https://buildloop-learning-platform-2m3ea73lm.vercel.app`. This commit changes only E2E coverage and evidence documents; a ready deployment is not hosted UI validation. No Production-targeted deployment or promotion was created.
+
+The subsequent documentation-only branch tip `e557dd9dc10093648be05089f5dd8a954e9b2d35` is also READY as Preview deployment `dpl_AaHvrKLjYtJ9ymQc5VYw4xUvSpae` (`https://buildloop-learning-platform-fx318hvkd.vercel.app`). The Vercel deployment API returned `target: null`; Preview classification is based on the Preview-filtered deployment inventory. This records build readiness, not hosted UI behavior.
 
 ## Remaining steps before launch
 
