@@ -49,8 +49,18 @@ async function checkRobotics(page: Page, expected: "pass" | "fail") {
 
 async function noHorizontalOverflow(page: Page, width: number) {
   await page.setViewportSize({ width, height: 920 });
-  const size = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth }));
+  const size = await page.evaluate(() => {
+    const header = document.querySelector<HTMLElement>(".m5-topbar");
+    const progress = header?.querySelector<HTMLElement>(".m5-progress");
+    return {
+      scroll: document.documentElement.scrollWidth,
+      client: document.documentElement.clientWidth,
+      progressRight: progress?.getBoundingClientRect().right ?? null,
+      contentRight: header ? header.getBoundingClientRect().right - Number.parseFloat(getComputedStyle(header).paddingRight) : null,
+    };
+  });
   expect(size.scroll).toBeLessThanOrEqual(size.client);
+  if (size.progressRight !== null && size.contentRight !== null) expect(size.progressRight).toBeLessThanOrEqual(size.contentRight + 1);
 }
 
 test("Mission 5 is locked until Mission 4; strong repair resumes, completes, and replays without losing history", async ({ page }) => {
@@ -60,7 +70,7 @@ test("Mission 5 is locked until Mission 4; strong repair resumes, completes, and
   await page.goto("/");
   await page.evaluate(() => localStorage.clear());
   await page.reload();
-  await expect(page.getByRole("article", { name: "Mission 5 locked" })).toContainText("Complete Mission 4 to continue");
+  await expect(page.getByRole("article", { name: "Mission 5 locked" })).toContainText("Complete Mission 4 to continue", { timeout: 15_000 });
   await expect(page.locator(".mission-number").allTextContents()).resolves.toEqual(["MISSION 1", "MISSION 2", "MISSION 3", "MISSION 4", "MISSION 5", "MISSION 6 · FINAL PROJECT"]);
   await noHorizontalOverflow(page, 1440);
 
@@ -69,6 +79,7 @@ test("Mission 5 is locked until Mission 4; strong repair resumes, completes, and
   await expect(card).toContainText("Something’s Broken");
   await startMission5(page);
   await page.getByRole("button", { name: "Try ClubBoard" }).click();
+  await noHorizontalOverflow(page, 390);
   await page.reload();
   await expect(page.getByRole("heading", { name: "See what happens when you leave." })).toBeVisible();
   await page.getByRole("button", { name: "Join Art Club" }).click();

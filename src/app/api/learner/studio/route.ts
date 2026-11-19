@@ -12,7 +12,7 @@ export async function GET(request: Request) {
       listStudioLearnerProgress(learner.id),
     ]);
     return Response.json({ learnerId: learner.id, applications, learningRecords }, { headers: { "Cache-Control": "no-store" } });
-  } catch (error) { return responseForPlatformError(error); }
+  } catch (error) { return responseForPlatformError(error, request); }
 }
 
 export async function PUT(request: Request) {
@@ -27,7 +27,7 @@ export async function PUT(request: Request) {
     const learningRecord = validateStudioLearnerSnapshot(body.learningRecord);
     const record = await writeStudioLearnerProgress(learner.id, body.appId, body.expectedRevision as number | null, learningRecord);
     return Response.json({ record }, { headers: { "Cache-Control": "no-store" } });
-  } catch (error) { return responseForPlatformError(error); }
+  } catch (error) { return responseForPlatformError(error, request); }
 }
 
 export async function DELETE(request: Request) {
@@ -38,5 +38,5 @@ export async function DELETE(request: Request) {
     if (!appId || appId.length > 80) return Response.json({ error: "Choose a Studio project to remove." }, { status: 400 });
     await archiveStudioProject(learner.id, appId);
     return Response.json({ archived: true }, { headers: { "Cache-Control": "no-store" } });
-  } catch (error) { return responseForPlatformError(error); }
+  } catch (error) { return responseForPlatformError(error, request); }
 }

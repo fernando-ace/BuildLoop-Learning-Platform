@@ -24,8 +24,10 @@ Configure variables independently for local development, Vercel Preview, and Ver
 | `OPENAI_API_KEY` | Server-only key for live Builder generation | Required for live Builder; Production readiness |
 | `BUILDLOOP_OPENAI_MODEL` | Server-only model selector | Optional |
 | `BUILDLOOP_BUILDER_MODE` | Deterministic fixture generation; accepted only in development and test, never Preview or Production | Development/test only |
+| `BUILDLOOP_BUILDER_DAILY_LIMIT` | Shared per-account daily hosted generation ceiling; valid range 1–100, defaults to 10 | Optional hosted; review against approved spend controls |
 | `RESEND_API_KEY` | Server-only invitation, verification, and password-reset mail key | Required for email delivery and Production readiness; optional in Preview |
 | `EMAIL_FROM` | Verified sender address for invitation, verification, and password-reset email | Required for email delivery and Production readiness; optional in Preview |
+| `BUILDLOOP_EMAIL_TRANSPORT` | Local-only transport override; development captures in memory by default, tests always capture, Production always uses Resend | Optional local development only; use `resend` only for an explicitly authorized controlled-inbox provider check |
 | `SENTRY_DSN` | Server/edge event destination | Required for Production readiness; optional in Preview; delivery must be verified separately |
 | `NEXT_PUBLIC_SENTRY_DSN` | Browser event destination; public project DSN, never an auth token | Required for Production readiness; optional in Preview; delivery must be verified separately |
 | `BUILDLOOP_ALLOW_REMOTE_MIGRATIONS` | Explicit one-command approval for a remote migration | Release command only; value `1` |

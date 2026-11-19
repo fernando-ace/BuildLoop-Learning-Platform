@@ -357,6 +357,7 @@ export default function MissionPage() {
   const activeMission = useSyncExternalStore(subscribeMission, getActiveMission, () => 1);
   const studioState = useSyncExternalStore(subscribeStudio, getStudioState, getServerStudioState);
   const dispatch = dispatchMission;
+  const mission2AttemptNumber = mission2Progress.attempts.length + (mission2State.stage === 10 ? 0 : 1);
   const courseScoreSets = [learnerProgress.bestSkillResults, mission2Progress.bestSkillResults, mission3Progress.bestSkillResults, mission4Progress.bestSkillResults, mission5Progress.bestSkillResults, mission6Progress.bestSkillResults];
   const courseSkills = learnerSkills.map((name) => ({ name, score: Math.max(0, ...courseScoreSets.flat().filter((item) => item.name === name).map((item) => item.score)) }));
   if (!hydrated || learnerSyncState === "loading" || learnerSyncState === "switching") return <div data-hydrated={hydrated}><main className="studio-main" aria-live="polite"><p role="status">{learnerSyncState === "switching" ? "Your previous account’s learning progress is hidden while this browser switches accounts." : "Checking your account learning progress…"}</p>{learnerSyncState === "switching" && <button className="button button-quiet" onClick={retryLearnerCloudSync} type="button">Retry account switch</button>}</main></div>;
@@ -365,7 +366,7 @@ export default function MissionPage() {
   if (activeMission === 5 && mission5State.stage > 0) return <div data-hydrated={hydrated}><LearnerSyncNotice state={learnerSyncState} /><MissionFivePlayer state={mission5State} progress={mission5Progress} /></div>;
   if (activeMission === 4 && mission4State.stage > 0) return <div data-hydrated={hydrated}><LearnerSyncNotice state={learnerSyncState} /><MissionFourPlayer state={mission4State} progress={mission4Progress} /></div>;
   if (activeMission === 3 && mission3State.stage > 0) return <div data-hydrated={hydrated}><LearnerSyncNotice state={learnerSyncState} /><MissionThreePlayer state={mission3State} progress={mission3Progress} /></div>;
-  if (activeMission === 2 && mission2State.stage > 0) return <div data-hydrated={hydrated}><LearnerSyncNotice state={learnerSyncState} /><MissionTwoPlayer state={mission2State} progress={mission2Progress} attemptCount={mission2Progress.attempts.length + 1} /></div>;
+  if (activeMission === 2 && mission2State.stage > 0) return <div data-hydrated={hydrated}><LearnerSyncNotice state={learnerSyncState} /><MissionTwoPlayer state={mission2State} progress={mission2Progress} attemptCount={mission2AttemptNumber} /></div>;
   if (activeMission === 0 || state.stage === 0) return <div data-hydrated={hydrated}><LearnerSyncNotice state={learnerSyncState} /><MissionHub state={state} progress={learnerProgress} mission2State={mission2State} mission2Progress={mission2Progress} mission3State={mission3State} mission3Progress={mission3Progress} mission4State={mission4State} mission4Progress={mission4Progress} mission5State={mission5State} mission5Progress={mission5Progress} mission6State={mission6State} mission6Progress={mission6Progress} onStart={() => dispatch({ type: "START" })} onStart2={startMission2} onStart3={startMission3} onStart4={startMission4} onStart5={startMission5} onStart6={startMission6} onOpenStudio={showStudioHub} /></div>;
   let stageView: ReactNode;
   switch (state.stage) {

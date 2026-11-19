@@ -1,4 +1,5 @@
 import "server-only";
+import { randomUUID } from "node:crypto";
 import { logEvent } from "./logger";
 import { getPublicAppUrl } from "./config";
 
@@ -10,7 +11,7 @@ export interface InvitationEmail {
   invitationUrl: string;
 }
 
-export type EmailDelivery = "sent" | "not_configured" | "failed";
+export type EmailDelivery = "sent" | "captured" | "not_configured" | "failed";
 
 export interface AccountActionEmail {
   recipient: string;
@@ -18,6 +19,42 @@ export interface AccountActionEmail {
   introduction: string;
   actionLabel: string;
   actionUrl: string;
+}
+
+export interface OutboundEmail {
+  recipient: string;
+  subject: string;
+  html: string;
+  text: string;
+}
+
+export interface EmailTransport {
+  send(message: OutboundEmail): Promise<EmailDelivery>;
+}
+
+const capturedEmails: OutboundEmail[] = [];
+const maxCapturedEmails = 50;
+
+/** In-memory transport for local development and tests. It never performs network I/O. */
+export const captureEmailTransport: EmailTransport = {
+  async send(message) {
+    capturedEmails.push(structuredClone(message));
+    if (capturedEmails.length > maxCapturedEmails) capturedEmails.shift();
+    logEvent("info", "email.captured", { transport: "capture" });
+    return "captured";
+  },
+};
+
+export function getCapturedEmails(): readonly OutboundEmail[] {
+  return structuredClone(capturedEmails);
+}
+
+export function clearCapturedEmails() {
+  capturedEmails.length = 0;
+}
+
+export function createEmailSender(transport: EmailTransport) {
+  return (message: OutboundEmail) => transport.send(message);
 }
 
 function escapeHtml(value: string) {
@@ -48,27 +85,80 @@ export function renderAccountActionEmail(message: AccountActionEmail) {
   };
 }
 
-async function deliver(recipient: string, rendered: { subject: string; html: string; text: string }): Promise<EmailDelivery> {
-  const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.EMAIL_FROM;
-  if (!apiKey || !from) return "not_configured";
-  try {
-    const response = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      signal: AbortSignal.timeout(8_000),
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ from, to: [recipient], ...rendered }),
-    });
-    if (!response.ok) {
+const resendEmailTransport: EmailTransport = {
+  async send(message) {
+    const apiKey = process.env.RESEND_API_KEY;
+    const from = process.env.EMAIL_FROM;
+    if (!apiKey || !from) return "not_configured";
+    const idempotencyKey = randomUUID();
+    const maxAttempts = 2;
+    const requestTimeoutMs = 2_500;
+    const maxRetryDelayMs = 3_000;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      let response: Response;
+      try {
+        response = await fetch("https://api.resend.com/emails", {
+          method: "POST",
+          signal: AbortSignal.timeout(requestTimeoutMs),
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+            "Idempotency-Key": idempotencyKey,
+          },
+          body: JSON.stringify({ from, to: [message.recipient], subject: message.subject, html: message.html, text: message.text }),
+        });
+      } catch {
+        if (attempt < maxAttempts) {
+          logEvent("warn", "email.delivery_retry", { provider: "resend", attempt, reason: "network_or_timeout" });
+          await new Promise((resolve) => setTimeout(resolve, 200));
+          continue;
+        }
+        logEvent("warn", "email.delivery_failed", { provider: "resend", reason: "network_or_timeout" });
+        return "failed";
+      }
+
+      if (response.ok) {
+        logEvent("info", "email.delivered", { provider: "resend" });
+        return "sent";
+      }
+
+      const retryable = response.status === 429 || response.status >= 500;
+      if (retryable && attempt < maxAttempts) {
+        const retryAfter = response.headers.get("retry-after");
+        const retryAfterSeconds = retryAfter === null ? Number.NaN : Number(retryAfter);
+        const retryAfterDate = retryAfter === null || Number.isFinite(retryAfterSeconds) ? Number.NaN : Date.parse(retryAfter);
+        const requestedDelayMs = Number.isFinite(retryAfterSeconds)
+          ? Math.max(0, Math.ceil(retryAfterSeconds * 1_000))
+          : Number.isFinite(retryAfterDate)
+            ? Math.max(0, retryAfterDate - Date.now())
+            : 200;
+
+        if (requestedDelayMs <= maxRetryDelayMs) {
+          logEvent("warn", "email.delivery_retry", { provider: "resend", attempt, status: response.status });
+          await new Promise((resolve) => setTimeout(resolve, requestedDelayMs));
+          continue;
+        }
+      }
+
       logEvent("warn", "email.delivery_failed", { provider: "resend", status: response.status });
       return "failed";
     }
-    logEvent("info", "email.delivered", { provider: "resend" });
-    return "sent";
-  } catch {
-    logEvent("warn", "email.delivery_failed", { provider: "resend", reason: "network_or_timeout" });
+
     return "failed";
-  }
+  },
+};
+
+function getEmailSender() {
+  // Tests always capture, even when provider credentials are present. Local development
+  // also captures by default; opting into a real provider requires an explicit setting.
+  if (process.env.NODE_ENV === "production") return createEmailSender(resendEmailTransport);
+  if (process.env.NODE_ENV === "test") return createEmailSender(captureEmailTransport);
+  return createEmailSender(process.env.BUILDLOOP_EMAIL_TRANSPORT === "resend" ? resendEmailTransport : captureEmailTransport);
+}
+
+function deliver(recipient: string, rendered: { subject: string; html: string; text: string }): Promise<EmailDelivery> {
+  return getEmailSender()({ recipient, ...rendered });
 }
 
 export async function sendAccountActionEmail(message: AccountActionEmail) {
@@ -81,7 +171,7 @@ export async function sendAccountActionEmail(message: AccountActionEmail) {
 
 export async function sendRequiredAccountActionEmail(message: AccountActionEmail) {
   const result = await sendAccountActionEmail(message);
-  if (result !== "sent") throw new Error("BuildLoop could not deliver the account email. Try again later.");
+  if (result !== "sent" && result !== "captured") throw new Error("BuildLoop could not deliver the account email. Try again later.");
 }
 
 export async function sendInvitationEmail(invitation: InvitationEmail): Promise<EmailDelivery> {

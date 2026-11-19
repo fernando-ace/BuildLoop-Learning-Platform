@@ -6,6 +6,13 @@ import type { GeneratedAppV4 } from "@/lib/builder/v4";
 type Member = { id: string; name: string; email: string; platformRole: "owner" | "administrator" | "member"; appRole: string | null };
 type Invitation = { id: string; email: string | null; appRole: string; status: string; expiresAt: string };
 
+function invitationDeliveryMessage(delivery: unknown, resent: boolean) {
+  if (delivery === "sent") return resent ? "Invitation email resent." : "Invitation email sent. You can also share the link.";
+  if (delivery === "captured") return "Test email captured locally; no email was sent. Share the invitation link directly.";
+  if (delivery === "failed") return "Invitation email failed; use the invitation link to share it directly.";
+  return resent ? "Email delivery is not configured; use the updated link to share it directly." : "Invitation created. Email delivery is not configured; share the link directly.";
+}
+
 export function AppMembers({ appId, artifact }: { appId: string; artifact: GeneratedAppV4 }) {
   const [members, setMembers] = useState<Member[]>([]), [invitations, setInvitations] = useState<Invitation[]>([]);
   const [currentUserId, setCurrentUserId] = useState("");
@@ -32,7 +39,7 @@ export function AppMembers({ appId, artifact }: { appId: string; artifact: Gener
     const result = await send("invitations", "POST", { email: email.trim() || undefined, appRole: role });
     if (!result) return;
     setShareUrl(result.invitation.url);
-    setMessage(result.delivery === "sent" ? "Invitation email sent. You can also share the link." : "Invitation created. Email delivery is not configured; share the link directly.");
+    setMessage(invitationDeliveryMessage(result.delivery, false));
     setEmail(""); await refresh();
   }
   const currentMember = members.find((item) => item.id === currentUserId);
@@ -50,6 +57,6 @@ export function AppMembers({ appId, artifact }: { appId: string; artifact: Gener
       {member.platformRole !== "owner" && member.id !== currentUserId && (currentMember?.platformRole === "owner" || member.platformRole === "member") && <button type="button" disabled={busy} onClick={async () => { if (await send("members", "DELETE", { memberId: member.id })) await refresh(); }}>Remove access</button>}
       {currentMember?.platformRole === "owner" && member.platformRole !== "owner" && <><label htmlFor={`platform-role-${member.id}`}>Platform access<select id={`platform-role-${member.id}`} value={member.platformRole} disabled={busy} onChange={async (event) => { if (await send("members", "PATCH", { memberId: member.id, platformRole: event.target.value })) await refresh(); }}><option value="member">Member</option><option value="administrator">Administrator</option></select></label><button type="button" disabled={busy} onClick={async () => { if (confirm(`Transfer app ownership to ${member.name}?`)) { const response = await fetch(`${base}/ownership`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ newOwnerId: member.id }) }); const result = await response.json(); setMessage(response.ok ? "Ownership transferred." : result.error || "Ownership could not be transferred."); await refresh(); } }}>Transfer ownership</button></>}
     </li>)}</ul>
-    <h3>Invitations</h3><ul>{invitations.map((invitation) => <li key={invitation.id}>{invitation.email || "Anyone with the link"} · {artifact.roles.find((item) => item.id === invitation.appRole)?.label ?? invitation.appRole} · {invitation.status}{invitation.status === "pending" && invitation.email && <button type="button" disabled={busy} onClick={async () => { const result = await send("invitations", "PATCH", { invitationId: invitation.id }); if (result) { setShareUrl(result.invitation.url); setMessage(result.delivery === "sent" ? "Invitation email resent." : "Email delivery failed; use the updated link to share it directly."); await refresh(); } }}>Resend email</button>}{invitation.status === "pending" && <button type="button" disabled={busy} onClick={async () => { if (await send("invitations", "DELETE", { invitationId: invitation.id })) await refresh(); }}>Revoke</button>}</li>)}</ul>
+    <h3>Invitations</h3><ul>{invitations.map((invitation) => <li key={invitation.id}>{invitation.email || "Anyone with the link"} · {artifact.roles.find((item) => item.id === invitation.appRole)?.label ?? invitation.appRole} · {invitation.status}{invitation.status === "pending" && invitation.email && <button type="button" disabled={busy} onClick={async () => { const result = await send("invitations", "PATCH", { invitationId: invitation.id }); if (result) { setShareUrl(result.invitation.url); setMessage(invitationDeliveryMessage(result.delivery, true)); await refresh(); } }}>Resend email</button>}{invitation.status === "pending" && <button type="button" disabled={busy} onClick={async () => { if (await send("invitations", "DELETE", { invitationId: invitation.id })) await refresh(); }}>Revoke</button>}</li>)}</ul>
   </details>;
 }

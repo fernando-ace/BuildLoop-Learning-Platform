@@ -6,7 +6,7 @@ const subscribeToLocation = () => () => {};
 const getResetNotice = () => new URLSearchParams(window.location.search).get("reset") === "success" ? "Your password was updated. Sign in with your new password." : "";
 const getResetToken = () => new URLSearchParams(window.location.search).get("token") ?? "";
 
-export function AuthForm({ publicAppUrl }: { publicAppUrl: string }) {
+export function AuthForm({ publicAppUrl, allowUnverifiedPreviewSignup }: { publicAppUrl: string; allowUnverifiedPreviewSignup: boolean }) {
   const [mode, setMode] = useState<"sign-in" | "sign-up" | "forgot">("sign-in");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -33,7 +33,12 @@ export function AuthForm({ publicAppUrl }: { publicAppUrl: string }) {
       const body = await response.json() as { message?: string; token?: string | null; error?: { message?: string } };
       if (!response.ok) throw new Error(body.message ?? body.error?.message ?? "We could not sign you in. Check your details and try again.");
       if (mode === "sign-up" && !body.token) {
-        setMessage("Check your email for a verification link before signing in.");
+        if (allowUnverifiedPreviewSignup) {
+          setMode("sign-in");
+          setMessage("Continue by signing in with the email and password you entered.");
+        } else {
+          setMessage("Check your email for a verification link before signing in.");
+        }
         return;
       }
       const requested = new URLSearchParams(window.location.search).get("returnTo");

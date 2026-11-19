@@ -1,11 +1,12 @@
 import { BuilderError, MAX_BUILDER_INPUT_CHARS, validateArtifact, type BuilderRequest } from "@/lib/builder/contract";
 import { getBuilder } from "@/lib/builder/provider";
+import type { BuilderResult } from "@/lib/builder/contract";
 import { getPlatformIdentity } from "@/lib/platform/session";
 import { getPlatformRepository, PlatformError } from "@/lib/platform/repository";
 import { sameOrigin } from "@/lib/platform/http";
 import { logEvent } from "@/lib/platform/logger";
 import * as Sentry from "@sentry/nextjs";
-import { consumeOperationLimit } from "@/lib/platform/rate-limit";
+import { consumeOperationLimit, withOperationLock } from "@/lib/platform/rate-limit";
 import { getBuildLoopEnvironment } from "@/lib/platform/config";
 
 export const runtime = "nodejs";
@@ -23,6 +24,10 @@ export async function POST(request: Request) {
     try {
       const quota = await consumeOperationLimit(`builder:${identity.id}`, 5, 60);
       if (!quota.allowed) return Response.json({ error: "Too many builds just now. Wait a minute and try again." }, { status: 429, headers: { "Retry-After": String(quota.retryAfterSeconds), "Cache-Control": "no-store" } });
+      const dailyLimit = Number(process.env.BUILDLOOP_BUILDER_DAILY_LIMIT ?? 10);
+      if (!Number.isInteger(dailyLimit) || dailyLimit < 1 || dailyLimit > 100) throw new Error("BUILDLOOP_BUILDER_DAILY_LIMIT must be an integer from 1 to 100.");
+      const dailyQuota = await consumeOperationLimit(`builder-daily:${identity.id}`, dailyLimit, 86_400);
+      if (!dailyQuota.allowed) return Response.json({ error: "You have reached today's build limit. Try again tomorrow." }, { status: 429, headers: { "Retry-After": String(dailyQuota.retryAfterSeconds), "Cache-Control": "no-store" } });
     } catch {
       return Response.json({ error: "The Builder is temporarily unavailable. Try again shortly." }, { status: 503, headers: { "Cache-Control": "no-store" } });
     }
@@ -53,9 +58,21 @@ export async function POST(request: Request) {
     feedback: feedbackRows as BuilderRequest["feedback"],
   };
   try {
-    const result = await getBuilder().generate(safe);
+    const repository = getPlatformRepository();
+    const application = await repository.getApplication(identity.id, value.appId);
+    if (application.platform_role !== "owner" && application.platform_role !== "administrator") {
+      throw new PlatformError("forbidden", "An app owner or administrator must do that.");
+    }
+    let result: BuilderResult;
+    if (getBuildLoopEnvironment() === "production" || getBuildLoopEnvironment() === "preview") {
+      const generation = await withOperationLock(`builder:${identity.id}`, () => getBuilder().generate(safe));
+      if (!generation.acquired) return Response.json({ error: "A build is already running for your account. Wait for it to finish." }, { status: 429, headers: { "Retry-After": "5", "Cache-Control": "no-store" } });
+      result = generation.value;
+    } else {
+      result = await getBuilder().generate(safe);
+    }
     if (!(process.env.NODE_ENV === "test" && process.env.BUILDLOOP_TEST_DB_PERSISTENCE !== "1")) {
-      await getPlatformRepository().saveVersion(identity, value.appId, safe.version, result.artifact, { provider: result.provider, attempts: result.attempts, projectName: project.name });
+      await repository.saveVersion(identity, value.appId, safe.version, result.artifact, { provider: result.provider, attempts: result.attempts, projectName: project.name });
     }
     return Response.json(result, { headers: { "Cache-Control": "no-store" } });
   }

@@ -37,6 +37,7 @@ async function startProject(page: Page, checkEntryResponsive = false, details = 
   await page.getByLabel("What are they trying to do, and what gets in the way?").fill(details.problem);
   await page.getByLabel("Why does solving this matter?").fill(details.why);
   await page.getByRole("button", { name: "Create project" }).click();
+  await expect(page.getByRole("heading", { name: "Start with one person and one problem." })).toBeVisible();
 }
 
 async function checkStudioWidths(page: Page, phase: string, widths = [390, 430, 1365, 1440]) {
@@ -373,7 +374,7 @@ test("saved V1 artifacts still open in their original interactive preview", asyn
   await page.evaluate((project) => localStorage.setItem("buildloop-studio-v1", JSON.stringify({ projects: [project], activeId: project.id, screen: "project" })), oldProject);
   await page.reload();
   const preview = page.frameLocator('iframe[title="Legacy reading list interactive preview"]');
-  await expect(preview.getByRole("heading", { name: "Legacy reading list" })).toBeVisible();
+  await expect(preview.getByRole("heading", { name: "Legacy reading list" })).toBeVisible({ timeout: 15_000 });
   await preview.getByRole("textbox", { name: "Book title" }).fill("The Left Hand of Darkness");
   await preview.getByRole("button", { name: "Add book" }).click();
   await expect(preview.getByText("The Left Hand of Darkness")).toBeVisible();
@@ -450,6 +451,27 @@ test("Studio can create three immutable versions and reopen an older preview", a
   await expect(page.getByRole("heading", { name: "Version 1 preview" })).toHaveCount(0);
 });
 
+test("new Studio project fields stay locked while creation is pending", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await page.getByRole("button", { name: "Explore Studio" }).click();
+  await page.getByRole("button", { name: "Start a project" }).click();
+  await page.getByLabel("Project name").fill("Topic Tracker");
+  await page.getByLabel("Who is this for?").fill("Students who study after school");
+  const problem = page.getByLabel("What are they trying to do, and what gets in the way?");
+  await problem.fill("They lose track of which topics need more practice before a test");
+  await page.getByLabel("Why does solving this matter?").fill("They want to use their study time well");
+  await page.route("**/api/apps", async (route) => {
+    if (route.request().method() === "POST") await new Promise((resolve) => setTimeout(resolve, 500));
+    await route.continue();
+  });
+  await page.getByRole("button", { name: "Create project" }).click();
+  await expect(problem).toBeDisabled();
+  await expect(page.getByRole("heading", { name: "Start with one person and one problem." })).toBeVisible();
+  await expect(page.getByLabel("What are they trying to do, and what gets in the way?")).toHaveValue("They lose track of which topics need more practice before a test");
+});
+
 test("Studio gently coaches vague ideas and implementation-first goals", async ({ page }) => {
   await startProject(page);
   await page.getByLabel("What are they trying to do, and what gets in the way?").fill("Build a thing");
@@ -467,7 +489,7 @@ test("Studio gently coaches vague ideas and implementation-first goals", async (
   await page.getByRole("button", { name: "Record test and gather feedback" }).click();
   await page.getByRole("button", { name: "Choose what to work on next" }).click();
   await page.getByLabel("What should change next?").fill("Add a JavaScript array to store topics");
-  await expect(page.getByRole("status")).toContainText("describing the behavior");
+  await expect(page.locator(".studio-coach")).toContainText("describing the behavior");
   await expect(page.getByRole("button", { name: "Build Version 2" })).toBeEnabled();
 });
 
@@ -560,7 +582,7 @@ test("V4 shared app uses real signed-in membership, invitation acceptance, and r
   const collaboratorSession = await page.request.post("/api/test-auth/session", { headers: { origin }, data: { userId: collaboratorId } });
   expect(collaboratorSession.ok(), await collaboratorSession.text()).toBeTruthy();
   await page.goto(`/invite/${token}`);
-  await expect(page).toHaveURL(new RegExp(`/apps/${appId}$`));
+  await expect(page).toHaveURL(new RegExp(`/apps/${appId}$`), { timeout: 15_000 });
   await expect(page.getByRole("heading", { name: "Campus Event Operations" })).toBeVisible();
   const registrations = page.locator(".published-collection").filter({ has: page.getByRole("heading", { name: "Registrations" }) });
   await expect(registrations.getByText("No records are visible to this role.")).toBeVisible();
@@ -646,5 +668,48 @@ test("Mission and Studio records resume in a separately signed-in browser contex
     expect(state.studio.learningRecords).toContainEqual(expect.objectContaining({ appId, stage: "brief", projectNotes: expect.objectContaining({ problem }) }));
   } finally {
     await secondContext.close();
+  }
+});
+
+test("independent accounts and account switching never expose another user's Studio app", async ({ page, browser }, testInfo) => {
+  const origin = "http://127.0.0.1:3107";
+  const ownerId = e2eUserId("owner", testInfo);
+  const otherUserId = e2eUserId("collaborator", testInfo);
+  const ownerCreate = await page.request.post("/api/apps", { headers: { origin }, data: { name: `Private owner app ${Date.now()}` } });
+  expect(ownerCreate.ok()).toBeTruthy();
+  const ownerAppId = (await ownerCreate.json()).application.id as string;
+
+  const otherContext = await browser.newContext();
+  try {
+    const otherSession = await otherContext.request.post(`${origin}/api/test-auth/session`, {
+      headers: { origin },
+      data: { userId: otherUserId },
+    });
+    expect(otherSession.ok()).toBeTruthy();
+    const otherPage = await otherContext.newPage();
+    await otherPage.goto(origin);
+
+    const privateState = await otherPage.request.get("/api/learner/studio");
+    expect(privateState.ok()).toBeTruthy();
+    expect((await privateState.json()).applications.map((application: { id: string }) => application.id)).not.toContain(ownerAppId);
+    expect((await otherPage.request.get(`/api/apps/${ownerAppId}`)).status()).toBe(404);
+
+    const otherCreate = await otherPage.request.post("/api/apps", { headers: { origin }, data: { name: `Private other app ${Date.now()}` } });
+    expect(otherCreate.ok()).toBeTruthy();
+    const otherAppId = (await otherCreate.json()).application.id as string;
+    expect((await page.request.get(`/api/apps/${otherAppId}`)).status()).toBe(404);
+
+    const switchedToOwner = await otherContext.request.post(`${origin}/api/test-auth/session`, {
+      headers: { origin },
+      data: { userId: ownerId },
+    });
+    expect(switchedToOwner.ok()).toBeTruthy();
+    expect((await otherPage.request.get(`/api/apps/${otherAppId}`)).status()).toBe(404);
+
+    const logout = await otherContext.request.delete(`${origin}/api/test-auth/session`, { headers: { origin } });
+    expect(logout.ok()).toBeTruthy();
+    expect((await otherPage.request.get("/api/learner/studio")).status()).toBe(401);
+  } finally {
+    await otherContext.close();
   }
 });

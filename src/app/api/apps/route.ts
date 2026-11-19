@@ -9,7 +9,7 @@ export async function GET(request: Request) {
   try {
     const user = await requireIdentity(request);
     return Response.json({ applications: await getPlatformRepository().listApplications(user.id) }, { headers: { "Cache-Control": "no-store" } });
-  } catch (error) { return responseForPlatformError(error); }
+  } catch (error) { return responseForPlatformError(error, request); }
 }
 
 export async function POST(request: Request) {
@@ -22,5 +22,5 @@ export async function POST(request: Request) {
     if (limited) return limited;
     const application = await getPlatformRepository().createApplication(user, body.name, isRecord(body.brief) ? body.brief : {});
     return Response.json({ application }, { status: 201, headers: { "Cache-Control": "no-store" } });
-  } catch (error) { return responseForPlatformError(error); }
+  } catch (error) { return responseForPlatformError(error, request); }
 }

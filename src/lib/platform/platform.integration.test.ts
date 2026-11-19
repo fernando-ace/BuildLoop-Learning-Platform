@@ -9,7 +9,7 @@ import { campusEventOperationsV4 } from "@/lib/builder/v4-platform-fixtures";
 import { getPlatformPool, closePlatformDatabase } from "./database";
 import { PlatformError, PlatformRepository } from "./repository";
 import { importLegacySQLiteFile } from "./sqlite-import";
-import { consumeOperationLimit } from "./rate-limit";
+import { consumeOperationLimit, withOperationLock } from "./rate-limit";
 import { readLearnerProgress, writeLearnerProgress } from "./learner-progress";
 import { archiveStudioProject, listStudioApplications, listStudioLearnerProgress, writeStudioLearnerProgress } from "./studio-learner-progress";
 import type { PlatformIdentity } from "./session";
@@ -100,6 +100,25 @@ describe.skipIf(!enabled)("PostgreSQL platform repository", () => {
     } finally {
       const { createHash } = await import("node:crypto");
       await pool().query("DELETE FROM operation_rate_limits WHERE key=$1", [createHash("sha256").update(key).digest("hex")]);
+    }
+  });
+
+  it("allows only one concurrent Builder operation per account across database clients", async () => {
+    const key = `builder:${randomUUID()}`;
+    let markEntered!: () => void;
+    let releaseOperation!: () => void;
+    const entered = new Promise<void>((resolve) => { markEntered = resolve; });
+    const pause = new Promise<void>((resolve) => { releaseOperation = resolve; });
+    const active = withOperationLock(key, async () => { markEntered(); await pause; return "completed"; });
+    try {
+      await entered;
+      const competing = await withOperationLock(key, async () => "should-not-run");
+      expect(competing).toEqual({ acquired: false });
+      releaseOperation();
+      await expect(active).resolves.toEqual({ acquired: true, value: "completed" });
+    } finally {
+      releaseOperation();
+      await active.catch(() => undefined);
     }
   });
 

@@ -12,7 +12,7 @@ export async function GET(request: Request, context: Context) {
     const user = await requireIdentity(request);
     const { appId } = await context.params;
     return Response.json({ invitations: await getPlatformRepository().listInvitations(user, appId) }, { headers: { "Cache-Control": "no-store" } });
-  } catch (error) { return responseForPlatformError(error); }
+  } catch (error) { return responseForPlatformError(error, request); }
 }
 
 export async function POST(request: Request, context: Context) {
@@ -28,7 +28,7 @@ export async function POST(request: Request, context: Context) {
     const url = new URL(`/invite/${encodeURIComponent(invitation.token)}`, getPublicAppUrl(request.url)).toString();
     const delivery = body.email ? await sendInvitationEmail({ recipient: body.email.trim(), accountName: invitation.accountName, inviterName: user.name, expiresAt: invitation.expiresAt, invitationUrl: url }) : "link_only";
     return Response.json({ invitation: { id: invitation.id, url, expiresAt: invitation.expiresAt }, delivery }, { status: 201, headers: { "Cache-Control": "no-store" } });
-  } catch (error) { return responseForPlatformError(error); }
+  } catch (error) { return responseForPlatformError(error, request); }
 }
 
 export async function PATCH(request: Request, context: Context) {
@@ -43,7 +43,7 @@ export async function PATCH(request: Request, context: Context) {
     const url = new URL(`/invite/${encodeURIComponent(invitation.token)}`, getPublicAppUrl(request.url)).toString();
     const delivery = await sendInvitationEmail({ recipient: invitation.email, accountName: invitation.accountName, inviterName: user.name, expiresAt: invitation.expiresAt, invitationUrl: url });
     return Response.json({ invitation: { id: invitation.id, url, expiresAt: invitation.expiresAt }, delivery }, { headers: { "Cache-Control": "no-store" } });
-  } catch (error) { return responseForPlatformError(error); }
+  } catch (error) { return responseForPlatformError(error, request); }
 }
 
 export async function DELETE(request: Request, context: Context) {
@@ -53,5 +53,5 @@ export async function DELETE(request: Request, context: Context) {
     if (!isRecord(body) || typeof body.invitationId !== "string") return Response.json({ error: "Choose an invitation to revoke." }, { status: 400 });
     await getPlatformRepository().revokeInvitation(user, (await context.params).appId, body.invitationId);
     return Response.json({ ok: true }, { headers: { "Cache-Control": "no-store" } });
-  } catch (error) { return responseForPlatformError(error); }
+  } catch (error) { return responseForPlatformError(error, request); }
 }

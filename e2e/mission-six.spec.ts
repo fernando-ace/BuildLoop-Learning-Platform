@@ -48,8 +48,8 @@ async function retestOverlap(page: Page) {
   await page.getByRole("button", { name: "Try this overlapping shift" }).click();
 }
 
-async function noHorizontalOverflow(page: Page, width: number) {
-  await page.setViewportSize({ width, height: 1000 });
+async function noHorizontalOverflow(page: Page, width: number, height = 1000) {
+  await page.setViewportSize({ width, height });
   const size = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth, wide: [...document.querySelectorAll<HTMLElement>("body *")].map((element) => ({ tag: element.tagName, className: element.className, text: element.innerText?.slice(0, 50), right: Math.round(element.getBoundingClientRect().right), width: Math.round(element.getBoundingClientRect().width) })).filter((item) => item.right > innerWidth + 1).slice(0, 12) }));
   expect(size.scroll, JSON.stringify(size.wide)).toBeLessThanOrEqual(size.client);
 }
@@ -108,6 +108,50 @@ test("strong full project completes, persists, replays, and shows course complet
   saved = await page.evaluate(() => JSON.parse(localStorage.getItem("buildloop-learner-v2") || "{}"));
   expect(saved.mission6Progress.attempts).toHaveLength(1);
   expect(saved.mission6State).toMatchObject({ stage: 1, questionsAsked: [] });
+  expect(errors).toEqual([]);
+});
+
+test("strong Mission 6 journey works at a 390px mobile viewport", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.setViewportSize({ width: 390, height: 844 });
+  await seedMission5Complete(page);
+  await startMission6(page);
+  await noHorizontalOverflow(page, 390, 844);
+
+  await chooseVersionOne(page, "Give a clear outcome");
+  await noHorizontalOverflow(page, 390, 844);
+  await testVersionOne(page);
+  await noHorizontalOverflow(page, 390, 844);
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Two people tried the app." })).toBeVisible();
+  await noHorizontalOverflow(page, 390, 844);
+
+  await page.getByRole("button", { name: /Jordan · Volunteer/ }).filter({ hasText: "I could sign up for the welcome table" }).click();
+  await page.getByRole("button", { name: /Lee · Organizer/ }).filter({ hasText: "I still need to count spaces" }).click();
+  await page.getByRole("button", { name: "Set the next goal" }).click();
+  await page.getByRole("button", { name: /Fix the shift conflict/ }).click();
+  await page.getByRole("button", { name: "Build version 2" }).click();
+  await noHorizontalOverflow(page, 390, 844);
+  await page.getByRole("button", { name: "Try version 2" }).click();
+  await retestOverlap(page);
+  await noHorizontalOverflow(page, 390, 844);
+
+  await page.getByRole("button", { name: "Check one more thing" }).click();
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Does a full shift stay full?" })).toBeVisible();
+  await noHorizontalOverflow(page, 390, 844);
+  await page.getByRole("button", { name: "Sign up Jordan" }).click();
+  await page.getByRole("button", { name: "Try one more signup" }).click();
+  await page.getByRole("button", { name: "Decide what ships" }).click();
+  await noHorizontalOverflow(page, 390, 844);
+  await page.getByRole("button", { name: "Share it" }).click();
+  await expect(page.getByRole("heading", { name: "You checked it before sharing." })).toBeVisible();
+  await expect(page.getByText("ALL SIX MISSIONS COMPLETE")).toBeVisible();
+  await noHorizontalOverflow(page, 390, 844);
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("buildloop-learner-v2") || "{}"));
+  expect(saved.mission6Progress.attempts).toHaveLength(1);
+  expect(saved.mission6Progress.latestSkillResults).toHaveLength(9);
   expect(errors).toEqual([]);
 });
 

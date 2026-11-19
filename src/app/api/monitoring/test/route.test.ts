@@ -7,7 +7,7 @@ import { POST } from "./route";
 
 afterEach(() => vi.unstubAllEnvs());
 
-function request() { return new Request("http://localhost/api/monitoring/test", { method: "POST", headers: { origin: "http://localhost" } }); }
+function request() { return new Request("http://localhost:3000/api/monitoring/test", { method: "POST", headers: { origin: "http://localhost:3000" } }); }
 
 describe("monitoring verification endpoint", () => {
   it("is unavailable unless explicitly enabled in a local test environment", async () => {

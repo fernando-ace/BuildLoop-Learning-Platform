@@ -21,9 +21,9 @@ import { getStudioSyncState, initializeStudioCloudSync, keepStudioThisDeviceCopy
 const labels: Record<StudioStage, string> = { idea: "Your idea", scope: "Version 1", brief: "Builder Brief", try: "Try it", feedback: "Feedback", goal: "Next goal", retest: "Retest", summary: "Project summary" };
 const stages: StudioStage[] = ["idea", "scope", "brief", "try", "feedback", "goal", "retest", "summary"];
 type StudioApplication = { id: string; name: string; platformRole: string; appRole: string | null; productionVersionNumber: number | null; previewVersionNumber: number | null };
-function field(id: string, label: string, value: string, update: (value: string) => void, placeholder: string, multiline = false) {
+function field(id: string, label: string, value: string, update: (value: string) => void, placeholder: string, multiline = false, disabled = false) {
   const maxLength = id.includes("name") ? 80 : id === "studio-feature" ? 180 : id.includes("instruction") ? 1200 : multiline ? 1000 : 500;
-  return <label className="studio-field" htmlFor={id}><span>{label}</span>{multiline ? <textarea id={id} maxLength={maxLength} value={value} onChange={(event) => update(event.target.value)} placeholder={placeholder} rows={3} /> : <input id={id} maxLength={maxLength} value={value} onChange={(event) => update(event.target.value)} placeholder={placeholder} />}</label>;
+  return <label className="studio-field" htmlFor={id}><span>{label}</span>{multiline ? <textarea id={id} disabled={disabled} maxLength={maxLength} value={value} onChange={(event) => update(event.target.value)} placeholder={placeholder} rows={3} /> : <input id={id} disabled={disabled} maxLength={maxLength} value={value} onChange={(event) => update(event.target.value)} placeholder={placeholder} />}</label>;
 }
 function ProjectList({ projects }: { projects: StudioProject[] }) {
   const [applications, setApplications] = useState<StudioApplication[]>([]);
@@ -178,7 +178,7 @@ function NewProjectForm() {
     } catch { setMessage("Could not create your project. Check your connection and try again."); }
     finally { setBusy(false); }
   }
-  return <><div className="studio-form">{field("new-name", "Project name", name, setName, "e.g. Practice planner")}{field("new-user", "Who is this for?", user, setUser, "One kind of person")}{field("new-problem", "What are they trying to do, and what gets in the way?", problem, setProblem, "Describe the hard part.", true)}{field("new-why", "Why does solving this matter?", why, setWhy, "What could get easier?")}</div>{coaching && <p className="studio-coach" role="status">A thought to help you shape it: {coaching}</p>}{message && <p role="alert">{message}</p>}<div className="studio-actions"><button className="button button-primary" disabled={!name.trim() || busy} onClick={() => void create()} type="button">{busy ? "Creating…" : "Create project →"}</button></div></>;
+  return <><div className="studio-form">{field("new-name", "Project name", name, setName, "e.g. Practice planner", false, busy)}{field("new-user", "Who is this for?", user, setUser, "One kind of person", false, busy)}{field("new-problem", "What are they trying to do, and what gets in the way?", problem, setProblem, "Describe the hard part.", true, busy)}{field("new-why", "Why does solving this matter?", why, setWhy, "What could get easier?", false, busy)}</div>{coaching && <p className="studio-coach" role="status">A thought to help you shape it: {coaching}</p>}{message && <p role="alert">{message}</p>}<div className="studio-actions"><button className="button button-primary" disabled={!name.trim() || busy} onClick={() => void create()} type="button">{busy ? "Creating…" : "Create project →"}</button></div></>;
 }
 
 export function Studio({ onBack, courseComplete }: { onBack: () => void; courseComplete: boolean }) {

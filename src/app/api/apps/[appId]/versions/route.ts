@@ -13,7 +13,7 @@ export async function POST(request: Request, context: Context) {
     const { appId } = await context.params;
     const version = await getPlatformRepository().saveVersion(user, appId, Number(body.versionNumber), body.artifact, isRecord(body.metadata) ? body.metadata : {});
     return Response.json({ version }, { status: 201, headers: { "Cache-Control": "no-store" } });
-  } catch (error) { return responseForPlatformError(error); }
+  } catch (error) { return responseForPlatformError(error, request); }
 }
 
 export async function GET(request: Request, context: Context) {
@@ -24,5 +24,5 @@ export async function GET(request: Request, context: Context) {
     if (versionId) return Response.json({ version: await getPlatformRepository().readVersion(user.id, appId, versionId) }, { headers: { "Cache-Control": "no-store" } });
     const application = await getPlatformRepository().getApplication(user.id, appId);
     return Response.json({ application }, { headers: { "Cache-Control": "no-store" } });
-  } catch (error) { return responseForPlatformError(error); }
+  } catch (error) { return responseForPlatformError(error, request); }
 }

@@ -1,65 +1,66 @@
 # Deployment guide
 
-## Goal 14 staging target
+## Goal 15 boundary
 
-Goal 14 uses the existing Vercel Hobby project and the dedicated Neon Free `buildloop-staging` database. The one-time Production-classified bootstrap is authorized only to satisfy Vercel's first-deployment restriction; it must remain protected and unaliased. All functional staging deployments use Preview. Do not attach a custom domain, promote a Preview, weaken protection, add Production secrets, or use paid services.
+Goal 15 authorizes protected Preview deployments from the `goal-15-public-beta-readiness` branch. It does not authorize a Production deployment, promotion, custom-domain assignment, Production secret provisioning, or Production database migration. Keep deployment protection enabled and do not use a Production-classified deployment to work around a Preview issue.
 
-## Vercel project context
+## Current Vercel state
 
-Vercel project ID: `prj_0WDtrIFOTYSHxeYHqfC4RPEIQCPl`
+Verified 2026-11-17 for project `buildloop-learning-platform` (`prj_0WDtrIFOTYSHxeYHqfC4RPEIQCPl`):
 
-Vercel team ID: `team_FxCiuzlr4hc0v3bitW4dWkVg`
+- The project is not live and has no domains.
+- Vercel SSO protection is enabled for all deployments other than custom domains (`all_except_custom_domains`).
+- One protected, unaliased, nonfunctional Production-classified bootstrap from Goal 14 exists: `dpl_6UREPC3qrP1HM47WFP1fnmcAft6R`. It predates Goal 15, has no aliases or `productionUrl`, and Goal 14 recorded no Production environment variables. Goal 15 has not created or changed it. Do not assign it an alias/domain, promote it, or use it as a release.
+- Pushes of the Goal 15 feature branch through Vercel Git integration have produced `READY` branch deployments with the expected commit SHA. The current application-code Preview was `8b2fddf`; later documentation-only commits also produced protected branch Previews.
+- No Goal 15 deployment has a Production target. Goal 15 made no Production promotion or domain assignment.
 
-Goal 14 branch: `goal-14-production-readiness`
+During Goal 14, explicit CLI Preview attempts were blocked while the project had no deployment record because Vercel required the initial deployment to be Production-classified. That historical CLI behavior is not the current Preview workflow: the connected Git integration now builds the Goal 15 feature branch as Preview. Do not follow the old Goal 14 bootstrap procedure or use `vercel deploy --prod --skip-domain`.
 
-GitHub's default and Vercel Production branch is `master`. The project's ignored-build command explicitly builds when `VERCEL_ENV=preview` and skips other Git deployments. Push only the reviewed Goal 14 branch when a Preview build is needed; never merge it to `master` for staging.
+### Protected Preview procedure
 
-## One-time private bootstrap
+1. Confirm the worktree is on the intended feature branch and contains only reviewed changes.
+2. Push that branch to the connected repository. Vercel Git integration should create a branch Preview; do not use `--prod`, promote, or assign a domain.
+3. In Vercel, verify the deployment commit SHA, branch, `READY` state, Preview environment, and SSO protection. If the build is blocked or classified unexpectedly, stop and inspect project settings; do not weaken protection or create a Production deployment.
+4. Use the exact generated deployment URL. Check `/api/health/live` and `/api/health/ready`; the latter must show database `ok`, migration journal `current`, and authentication `configured`. Email, Builder, and monitoring may remain unavailable in Preview; those statuses are not launch approval.
+5. Use only synthetic `.example.test` identities and records. Do not send real email or make billable model requests. Verify cleanup in the Preview database after hosted tests.
 
-Vercel requires the first deployment record to be Production-classified. Goal 14 explicitly authorizes one bootstrap for that purpose, only after rechecking the Hobby account, zero deployment count, enabled Vercel Authentication, `all_except_custom_domains` (Standard Protection) scope, no custom domains, no Production environment variables, and a clean reviewed Goal 14 commit. [Standard Protection](https://vercel.com/docs/deployment-protection) covers deployment and Preview URLs but not Production-domain aliases. Run exactly once:
+## Environment configuration
 
-```powershell
-vercel deploy --prod --skip-domain --yes
-```
+Provision these values through Vercel's environment-specific secret store. Never commit them, print them, or put them in URLs or evidence reports.
 
-Do not use `--verify` or any protection bypass. Confirm the result is protected from unauthenticated requests, has no alias or `productionUrl`, the project remains not live, and the stable `vercel.app` project domain has no deployment (404) before continuing. If any check fails, stop and inspect the project state; do not retry. The bootstrap is not a functional app deployment because Production environment variables remain unset. Do not assign a Production domain or send production traffic to it. Vercel Authentication's `all` scope can protect all domains on Hobby, but this project setting is not changed as part of Goal 14.
+| Variable | Preview | Production |
+| --- | --- | --- |
+| `DATABASE_URL` | TLS PostgreSQL runtime URL; pooling is supported | TLS URL for a separate Production database; use the provider's supported runtime pooler |
+| `DATABASE_MIGRATION_URL` | Optional direct/unpooled Preview URL for migrations | Direct/unpooled Production URL used only by the controlled migration release process |
+| `BUILDLOOP_ENVIRONMENT` | `preview` when set explicitly | `production`; it must match Vercel's `VERCEL_ENV` |
+| `BETTER_AUTH_SECRET` | Unique random secret, at least 32 characters | Separate unique random secret, at least 32 characters |
+| `PUBLIC_APP_URL`, `BETTER_AUTH_URL` | May use the exact generated Preview origin; omit if Vercel's `VERCEL_URL` fallback is appropriate | Same canonical HTTPS origin, with no path, query, or fragment |
+| `RESEND_API_KEY`, `EMAIL_FROM` | Optional; without both, delivery is unavailable | Required for account verification, recovery, and invitations. Verify sender/domain and DNS first |
+| `OPENAI_API_KEY` | Optional; without it, Builder returns an unavailable state | Required for live generation. Provision only after an approved zero-charge arrangement exists |
+| `BUILDLOOP_BUILDER_DAILY_LIMIT` | Optional; default 10, accepted range 1–100 | Set an operator-approved per-account cap. This is a request quota, not a monetary spend cap |
+| `SENTRY_DSN`, `NEXT_PUBLIC_SENTRY_DSN` | Optional; absent means durable monitoring is unavailable | Both required for readiness; configure and verify event receipt and alert routing |
+| `VERCEL_ENV`, `VERCEL_URL` | Supplied by Vercel | Supplied by Vercel; do not override inconsistently |
 
-## Database setup
+Never set `BUILDLOOP_PREVIEW_ALLOW_UNVERIFIED_SIGNUPS`, `BUILDLOOP_AUTH_MODE`, or `BUILDLOOP_TEST_AUTH_SECRET` in Production. Do not enable the deterministic Builder provider in Production. Production email uses the Resend transport; the local capture transport is for development and tests. Use server-only environment variables for credentials; never prefix secrets with `NEXT_PUBLIC_`.
 
-Use the existing `buildloop-staging` Neon Free project in US East (N. Virginia), dedicated to BuildLoop staging. The Vercel Neon integration provides pooled `DATABASE_URL` and direct `DATABASE_URL_UNPOOLED`/`POSTGRES_URL_NON_POOLING` variables, all scoped only to Preview. Do not create a second database or connect another application. Drizzle migrations prefer explicit `DATABASE_MIGRATION_URL`, then the provider's direct/unpooled variable, then pooled `DATABASE_URL`. Never add connection values to Git, logs, shell history, or evidence.
+Before enabling a custom domain, confirm control of the domain, DNS, current cost, and the resulting access policy. The current SSO setting excludes custom domains, so review Vercel protection and BuildLoop authentication before assigning one. Set `PUBLIC_APP_URL` and `BETTER_AUTH_URL` to the final HTTPS origin. Configure any future OAuth provider's callback URLs to that same origin; the current email/password design does not require an OAuth callback. Verification, recovery, and invitation links must resolve to the canonical origin.
 
-Runtime PostgreSQL uses `pg` with a small bounded pool, short connection/statement timeouts, and TLS enforced in Production. Keep Preview and Production databases separate. For a remote staging migration, set `BUILDLOOP_ENVIRONMENT=preview`, `VERCEL_ENV=preview`, and `BUILDLOOP_ALLOW_REMOTE_MIGRATIONS=1`, then run `npm run db:migrate`; it selects the direct Neon URL automatically. Confirm the target host and journal after applying migrations. The migration command refuses remote targets without explicit opt-in and refuses production without a second explicit opt-in.
+## Controlled Production release procedure
 
-## Preview environment
+This procedure documents a future release and does not authorize or execute one. Every external service and plan must remain within the approved $0/month ceiling. If any essential provider requires paid access, stop and keep that capability disabled.
 
-Configure only the Vercel Preview environment:
-
-- `DATABASE_URL`: Neon pooled URL with TLS.
-- `DATABASE_URL_UNPOOLED` or `POSTGRES_URL_NON_POOLING`: Neon direct URL with TLS, selected automatically for controlled migration runs. `DATABASE_MIGRATION_URL` can override it when needed.
-- `BETTER_AUTH_SECRET`: unique random secret of at least 32 characters.
-- `VERCEL_ENV=preview` is supplied by Vercel; do not override it inconsistently.
-- `BUILDLOOP_PREVIEW_ALLOW_UNVERIFIED_SIGNUPS=1` only when Vercel Authentication is enabled for every deployment URL. It allows password signup without email verification inside SSO-protected staging. It does not fake invitation or password-reset delivery.
-- `PUBLIC_APP_URL` and `BETTER_AUTH_URL` may be omitted on Vercel Preview; the app uses that deployment's built-in `VERCEL_URL` origin. Set both explicitly only when they match the exact preview origin.
-- `RESEND_API_KEY` and `EMAIL_FROM` are optional for Preview. Without them, email actions return a visible failure.
-- `OPENAI_API_KEY` is optional for Preview. Without it, live Builder generation is unavailable; no fixture or deterministic provider is enabled in the hosted app.
-- `SENTRY_DSN` and `NEXT_PUBLIC_SENTRY_DSN` are optional for Preview. Use Vercel runtime logs for short-term diagnosis and do not treat them as durable monitoring.
-
-After the bootstrap, deploy only the feature branch as a Preview:
-
-```powershell
-vercel deploy --environment preview --yes
-```
-
-Verify the actual commit SHA, generated `vercel.app` URL, Vercel Authentication protection, and `/api/health/live` and `/api/health/ready` responses. The ready response must show current migrations and authentication as configured; optional provider checks may report unavailable. Never promote the Preview or merge this branch into the default branch as part of staging.
-
-## Production
-
-The bootstrap deployment is intentionally nonfunctional because no Production environment variables are configured; it is only the Vercel first-deployment record. Production activation is outside the authorized Goal 14 staging scope. Before a later production release, provision a separate managed database, configure verified email delivery, live Builder credentials, both Sentry DSNs, backups/restore, production origins, and required hosting protection. Require all production readiness checks and the full launch checklist in `GOAL14_EVIDENCE.md`; apply production migrations only through the explicit protected release step.
-
-## Hobby usage and cost limits
-
-The linked Vercel team is on Hobby, a $0 plan without a billing cycle. Current documented limits include 100 deployments/day, a 2-vCPU/8-GB build machine, 64-GB build disk, and a 300-second function maximum. Included monthly usage includes 1 million function invocations, 100 GB-hours of function duration, 4 CPU-hours of active function compute, and 360 GB-hours of provisioned function memory. Exceeding a Hobby limit generally pauses that feature until its reset period rather than billing overage; Web Analytics can pause for seven days. Do not start a Pro trial or enable a paid feature. Recheck current usage in the Vercel dashboard before a large test run. See [Vercel Hobby plan and limits](https://vercel.com/docs/plans/hobby).
+1. **Clear the launch gates.** Complete the automated and hosted checks in [PUBLIC_BETA_LAUNCH_CHECKLIST.md](PUBLIC_BETA_LAUNCH_CHECKLIST.md). Resolve the high-severity dependency audit or obtain an explicit risk decision from the responsible security owner. Verify email delivery with controlled addresses, live Builder access and its true cost ceiling, durable monitoring/alerts, the Production database plan, backups, and an isolated restore drill. Confirm product, security, and release-owner approvals.
+2. **Provision Production separately.** Create a dedicated Production database and least-privilege credentials. Configure automated backups, retention, restore access, and agreed RPO/RTO. Provision only the Production variables in the table above. Verify database, email sender, model access/cost controls, and monitoring in their provider consoles without disclosing secrets.
+3. **Review migrations.** Generate and inspect committed SQL migrations, apply them to Preview, and verify the resulting schema and application behavior. Ensure the migration is compatible with both the current Production code and the release candidate. Do not use schema push.
+4. **Apply Production migrations from the controlled release environment.** Load the direct Production migration URL from the secret manager without printing it. Set `BUILDLOOP_ENVIRONMENT=production`, `VERCEL_ENV=production`, `BUILDLOOP_ALLOW_REMOTE_MIGRATIONS=1`, and `BUILDLOOP_ALLOW_PRODUCTION_MIGRATIONS=1` only in the protected one-time migration process, then run `npm run db:migrate`. Confirm the target database identity and migration journal. Unset the flags and temporary URL immediately afterward. Never store these opt-in flags in the running Vercel application's environment.
+5. **Deploy only after separate approval.** Merge the reviewed release commit to the Production branch configured in Vercel; verify that branch in the dashboard immediately before release. Vercel Git integration will create the Production deployment. Do not promote a Preview or use an ad hoc `--prod` bootstrap. Verify the resulting commit SHA, Production target, protection, and canonical origin.
+6. **Run the Production smoke.** Require `/api/health/live` and `/api/health/ready` to return 200, with the database, migration journal, authentication, email, Builder, and monitoring checks all configured. Use designated synthetic accounts to verify signup, verification, sign-in, reset, logout, project persistence, Builder generation, publication, and rollback. Confirm a Sentry test event and alert delivery. Do not invite beta users until checks pass.
+7. **Record and monitor.** Record commit/deployment IDs, migration result, test outcomes, and incident owner without user content or secrets. Watch structured logs, Sentry alerts, database health, and provider usage during the controlled rollout. Keep the previous compatible deployment and database rollback/recovery procedure available.
 
 ## Rollback and recovery
 
-For application-only faults, use Vercel's rollback to the previous compatible Preview deployment. Do not change or reset database contents to roll back code. For staging data recovery, use the Neon Free snapshot/restore features available to the project and first restore to an isolated branch/project if supported by the current free plan. Verify current plan limits in the Neon console before the operation; do not upgrade or add paid backup services. The free-tier recovery window and snapshot limits are provider-controlled and must be recorded from the provisioned project's current plan before claiming a recovery guarantee. See [OPERATIONS_RUNBOOK.md](./OPERATIONS_RUNBOOK.md) for the controlled restore procedure.
+For an application-only failure, roll back Vercel to the last compatible Production deployment after checking schema compatibility. Do not restore or alter database contents to roll back code. For data loss, restore to a new isolated database, validate it, and plan a controlled cutover with the operator; do not overwrite Production during a drill. Follow [OPERATIONS_RUNBOOK.md](OPERATIONS_RUNBOOK.md) for database diagnosis, secret rotation, backup/restore, and incident recovery.
+
+## Cost and current launch status
+
+The Vercel project was verified on Hobby and the existing Neon Preview project was previously recorded as Free. Current billing usage across providers has not been independently confirmed; the Vercel charges endpoint returned `costs_not_found`, and Neon billing data was unavailable. Recheck all plans and usage before a release. No Production environment, Production database, domain, paid feature, or Production deployment was created for Goal 15. Current readiness and unresolved gates are in [GOAL15_EVIDENCE.md](GOAL15_EVIDENCE.md) and [PUBLIC_BETA_LAUNCH_CHECKLIST.md](PUBLIC_BETA_LAUNCH_CHECKLIST.md).

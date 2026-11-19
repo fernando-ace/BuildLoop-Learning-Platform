@@ -13,5 +13,5 @@ export async function POST(request: Request, context: Context) {
     const { appId } = await context.params;
     await getPlatformRepository().transferOwnership(user, appId, body.newOwnerId);
     return Response.json({ ok: true }, { headers: { "Cache-Control": "no-store" } });
-  } catch (error) { return responseForPlatformError(error); }
+  } catch (error) { return responseForPlatformError(error, request); }
 }

@@ -8,7 +8,7 @@ export async function GET(request: Request) {
   try {
     const learner = await requireIdentity(request);
     return Response.json({ learnerId: learner.id, progress: await readLearnerProgress(learner.id) }, { headers: { "Cache-Control": "no-store" } });
-  } catch (error) { return responseForPlatformError(error); }
+  } catch (error) { return responseForPlatformError(error, request); }
 }
 
 export async function PUT(request: Request) {
@@ -22,5 +22,5 @@ export async function PUT(request: Request) {
     const snapshot = validateLearnerSnapshot(body.progress);
     const progress = await writeLearnerProgress(learner.id, body.expectedRevision as number | null, snapshot);
     return Response.json({ progress }, { headers: { "Cache-Control": "no-store" } });
-  } catch (error) { return responseForPlatformError(error); }
+  } catch (error) { return responseForPlatformError(error, request); }
 }

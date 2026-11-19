@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { renderInvitationEmail, sendInvitationEmail, sendRequiredAccountActionEmail } from "./email";
+import { clearCapturedEmails, createEmailSender, getCapturedEmails, renderInvitationEmail, sendInvitationEmail, sendRequiredAccountActionEmail, type OutboundEmail } from "./email";
 
-afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); });
+afterEach(() => { clearCapturedEmails(); vi.unstubAllEnvs(); vi.unstubAllGlobals(); });
 
 const invitation = { recipient: "learner@example.test", accountName: "Ari & Co", inviterName: "Ari <admin>", expiresAt: "2027-01-01T00:00:00.000Z", invitationUrl: "https://buildloop.example/invite/random-token" };
 const accountAction = { recipient: "learner@example.test", subject: "Verify your BuildLoop email", introduction: "Confirm your email address.", actionLabel: "Verify email", actionUrl: "http://localhost:3000/verify?token=secret" };
@@ -18,6 +18,7 @@ describe("invitation email", () => {
   });
 
   it("keeps copied-link flow available when provider credentials are absent", async () => {
+    vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("RESEND_API_KEY", ""); vi.stubEnv("EMAIL_FROM", "");
     const fetch = vi.fn(); vi.stubGlobal("fetch", fetch);
     expect(await sendInvitationEmail(invitation)).toBe("not_configured");
@@ -25,23 +26,109 @@ describe("invitation email", () => {
   });
 
   it("sends through Resend and reports provider failure without leaking details", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("BUILDLOOP_EMAIL_TRANSPORT", "capture");
     vi.stubEnv("RESEND_API_KEY", "test-resend-key"); vi.stubEnv("EMAIL_FROM", "BuildLoop <invites@example.test>");
     const fetch = vi.fn().mockResolvedValue({ ok: true, status: 200 }); vi.stubGlobal("fetch", fetch);
     expect(await sendInvitationEmail(invitation)).toBe("sent");
     const request = fetch.mock.calls[0][1] as RequestInit;
     expect((request.headers as Record<string, string>).Authorization).toBe("Bearer test-resend-key");
+    expect((request.headers as Record<string, string>)["Idempotency-Key"]).toMatch(/^[0-9a-f-]{36}$/i);
     expect(String(request.body)).toContain("learner@example.test");
-    fetch.mockResolvedValueOnce({ ok: false, status: 503 });
+    fetch.mockReset().mockResolvedValue({ ok: false, status: 503, headers: new Headers({ "Retry-After": "0" }) });
     expect(await sendInvitationEmail(invitation)).toBe("failed");
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect((fetch.mock.calls[0][1]?.headers as Record<string, string>)["Idempotency-Key"])
+      .toBe((fetch.mock.calls[1][1]?.headers as Record<string, string>)["Idempotency-Key"]);
+  });
+
+  it("retries transient Resend failures with the same idempotency key", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("RESEND_API_KEY", "test-resend-key"); vi.stubEnv("EMAIL_FROM", "BuildLoop <invites@example.test>");
+    const fetch = vi.fn()
+      .mockResolvedValueOnce({ ok: false, status: 503, headers: new Headers({ "Retry-After": "0" }) })
+      .mockResolvedValueOnce({ ok: true, status: 200 });
+    vi.stubGlobal("fetch", fetch);
+
+    expect(await sendInvitationEmail(invitation)).toBe("sent");
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect((fetch.mock.calls[0][1]?.headers as Record<string, string>)["Idempotency-Key"])
+      .toBe((fetch.mock.calls[1][1]?.headers as Record<string, string>)["Idempotency-Key"]);
+  });
+
+  it("retries a network failure once with the same idempotency key", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("RESEND_API_KEY", "test-resend-key"); vi.stubEnv("EMAIL_FROM", "BuildLoop <invites@example.test>");
+    const fetch = vi.fn()
+      .mockRejectedValueOnce(new Error("network unavailable"))
+      .mockResolvedValueOnce({ ok: true, status: 200 });
+    vi.stubGlobal("fetch", fetch);
+
+    expect(await sendInvitationEmail(invitation)).toBe("sent");
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect((fetch.mock.calls[0][1]?.headers as Record<string, string>)["Idempotency-Key"])
+      .toBe((fetch.mock.calls[1][1]?.headers as Record<string, string>)["Idempotency-Key"]);
+  });
+
+  it("does not retry permanent Resend rejections or long Retry-After windows", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("RESEND_API_KEY", "test-resend-key"); vi.stubEnv("EMAIL_FROM", "BuildLoop <invites@example.test>");
+    const fetch = vi.fn()
+      .mockResolvedValueOnce({ ok: false, status: 400, headers: new Headers() })
+      .mockResolvedValueOnce({ ok: false, status: 429, headers: new Headers({ "Retry-After": "60" }) });
+    vi.stubGlobal("fetch", fetch);
+
+    expect(await sendInvitationEmail(invitation)).toBe("failed");
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(await sendInvitationEmail(invitation)).toBe("failed");
+    expect(fetch).toHaveBeenCalledTimes(2);
   });
 
   it("fails required account actions when email is unconfigured or the provider rejects delivery", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("BUILDLOOP_ENVIRONMENT", "development");
     vi.stubEnv("PUBLIC_APP_URL", "http://localhost:3000");
     vi.stubEnv("RESEND_API_KEY", ""); vi.stubEnv("EMAIL_FROM", "");
     await expect(sendRequiredAccountActionEmail(accountAction)).rejects.toThrow("could not deliver the account email");
 
     vi.stubEnv("RESEND_API_KEY", "test-resend-key"); vi.stubEnv("EMAIL_FROM", "BuildLoop <invites@example.test>");
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 503 }));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 503, headers: new Headers({ "Retry-After": "0" }) }));
     await expect(sendRequiredAccountActionEmail(accountAction)).rejects.toThrow("could not deliver the account email");
+  });
+
+  it("captures development and test messages without network access, even when Resend is configured", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("BUILDLOOP_EMAIL_TRANSPORT", "");
+    vi.stubEnv("RESEND_API_KEY", "test-resend-key");
+    vi.stubEnv("EMAIL_FROM", "BuildLoop <invites@example.test>");
+    const fetch = vi.fn();
+    vi.stubGlobal("fetch", fetch);
+
+    expect(await sendInvitationEmail(invitation)).toBe("captured");
+    expect(getCapturedEmails()).toHaveLength(1);
+    expect(fetch).not.toHaveBeenCalled();
+
+    vi.stubEnv("NODE_ENV", "test");
+    vi.stubEnv("BUILDLOOP_EMAIL_TRANSPORT", "resend");
+    vi.stubEnv("PUBLIC_APP_URL", "http://localhost:3000");
+
+    expect(await sendInvitationEmail(invitation)).toBe("captured");
+    await expect(sendRequiredAccountActionEmail(accountAction)).resolves.toBeUndefined();
+
+    expect(getCapturedEmails()).toEqual([
+      expect.objectContaining({ recipient: invitation.recipient, subject: expect.stringContaining("Ari & Co"), text: expect.stringContaining(invitation.invitationUrl) }),
+      expect.objectContaining({ recipient: invitation.recipient, subject: expect.stringContaining("Ari & Co"), text: expect.stringContaining(invitation.invitationUrl) }),
+      expect.objectContaining({ recipient: accountAction.recipient, subject: accountAction.subject, text: expect.stringContaining(accountAction.actionUrl) }),
+    ]);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("routes messages through an injected transport", async () => {
+    const message: OutboundEmail = { recipient: "learner@example.test", subject: "Hello", html: "<p>Hello</p>", text: "Hello" };
+    const transport = { send: vi.fn().mockResolvedValue("captured" as const) };
+    const send = createEmailSender(transport);
+
+    await expect(send(message)).resolves.toBe("captured");
+    expect(transport.send).toHaveBeenCalledWith(message);
   });
 });
