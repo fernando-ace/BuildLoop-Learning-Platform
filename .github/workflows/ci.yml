@@ -47,6 +47,8 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npm test
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
       - run: npm run build
       - run: npm audit
