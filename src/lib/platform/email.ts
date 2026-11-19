@@ -1,4 +1,5 @@
 import "server-only";
+import { randomUUID } from "node:crypto";
 import { logEvent } from "./logger";
 import { getPublicAppUrl } from "./config";
 
@@ -89,23 +90,62 @@ const resendEmailTransport: EmailTransport = {
     const apiKey = process.env.RESEND_API_KEY;
     const from = process.env.EMAIL_FROM;
     if (!apiKey || !from) return "not_configured";
-    try {
-      const response = await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        signal: AbortSignal.timeout(8_000),
-        headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ from, to: [message.recipient], subject: message.subject, html: message.html, text: message.text }),
-      });
-      if (!response.ok) {
-        logEvent("warn", "email.delivery_failed", { provider: "resend", status: response.status });
+    const idempotencyKey = randomUUID();
+    const maxAttempts = 2;
+    const requestTimeoutMs = 2_500;
+    const maxRetryDelayMs = 3_000;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      let response: Response;
+      try {
+        response = await fetch("https://api.resend.com/emails", {
+          method: "POST",
+          signal: AbortSignal.timeout(requestTimeoutMs),
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+            "Idempotency-Key": idempotencyKey,
+          },
+          body: JSON.stringify({ from, to: [message.recipient], subject: message.subject, html: message.html, text: message.text }),
+        });
+      } catch {
+        if (attempt < maxAttempts) {
+          logEvent("warn", "email.delivery_retry", { provider: "resend", attempt, reason: "network_or_timeout" });
+          await new Promise((resolve) => setTimeout(resolve, 200));
+          continue;
+        }
+        logEvent("warn", "email.delivery_failed", { provider: "resend", reason: "network_or_timeout" });
         return "failed";
       }
-      logEvent("info", "email.delivered", { provider: "resend" });
-      return "sent";
-    } catch {
-      logEvent("warn", "email.delivery_failed", { provider: "resend", reason: "network_or_timeout" });
+
+      if (response.ok) {
+        logEvent("info", "email.delivered", { provider: "resend" });
+        return "sent";
+      }
+
+      const retryable = response.status === 429 || response.status >= 500;
+      if (retryable && attempt < maxAttempts) {
+        const retryAfter = response.headers.get("retry-after");
+        const retryAfterSeconds = retryAfter === null ? Number.NaN : Number(retryAfter);
+        const retryAfterDate = retryAfter === null || Number.isFinite(retryAfterSeconds) ? Number.NaN : Date.parse(retryAfter);
+        const requestedDelayMs = Number.isFinite(retryAfterSeconds)
+          ? Math.max(0, Math.ceil(retryAfterSeconds * 1_000))
+          : Number.isFinite(retryAfterDate)
+            ? Math.max(0, retryAfterDate - Date.now())
+            : 200;
+
+        if (requestedDelayMs <= maxRetryDelayMs) {
+          logEvent("warn", "email.delivery_retry", { provider: "resend", attempt, status: response.status });
+          await new Promise((resolve) => setTimeout(resolve, requestedDelayMs));
+          continue;
+        }
+      }
+
+      logEvent("warn", "email.delivery_failed", { provider: "resend", status: response.status });
       return "failed";
     }
+
+    return "failed";
   },
 };
 
