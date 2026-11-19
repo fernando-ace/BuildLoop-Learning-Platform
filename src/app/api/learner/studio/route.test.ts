@@ -41,20 +41,20 @@ describe("private Studio learner API", () => {
   it("blocks cross-site writes and scopes accepted writes to the authenticated learner", async () => {
     identity.mockResolvedValue({ id: "learner-a" });
     const body = { appId: "app_a", expectedRevision: null, learningRecord: record };
-    const rejected = await PUT(new Request("http://localhost/api/learner/studio", { method: "PUT", headers: { origin: "https://attacker.example", "content-type": "application/json" }, body: JSON.stringify(body) }));
+    const rejected = await PUT(new Request("http://localhost:3000/api/learner/studio", { method: "PUT", headers: { origin: "https://attacker.example", "content-type": "application/json" }, body: JSON.stringify(body) }));
     expect(rejected.status).toBe(403);
     writeStudioLearnerProgress.mockResolvedValue({ appId: "app_a", revision: 1, ...record });
-    const accepted = await PUT(new Request("http://localhost/api/learner/studio", { method: "PUT", headers: { origin: "http://localhost", "content-type": "application/json" }, body: JSON.stringify(body) }));
+    const accepted = await PUT(new Request("http://localhost:3000/api/learner/studio", { method: "PUT", headers: { origin: "http://localhost:3000", "content-type": "application/json" }, body: JSON.stringify(body) }));
     expect(accepted.status).toBe(200);
     expect(writeStudioLearnerProgress).toHaveBeenCalledWith("learner-a", "app_a", null, record);
   });
 
   it("archives a project for only the authenticated learner and requires same-origin", async () => {
     identity.mockResolvedValue({ id: "learner-a" });
-    const blocked = await DELETE(new Request("http://localhost/api/learner/studio?appId=app_a", { method: "DELETE", headers: { origin: "https://attacker.example" } }));
+    const blocked = await DELETE(new Request("http://localhost:3000/api/learner/studio?appId=app_a", { method: "DELETE", headers: { origin: "https://attacker.example" } }));
     expect(blocked.status).toBe(403);
     archiveStudioProject.mockResolvedValue(undefined);
-    const accepted = await DELETE(new Request("http://localhost/api/learner/studio?appId=app_a", { method: "DELETE", headers: { origin: "http://localhost" } }));
+    const accepted = await DELETE(new Request("http://localhost:3000/api/learner/studio?appId=app_a", { method: "DELETE", headers: { origin: "http://localhost:3000" } }));
     expect(accepted.status).toBe(200);
     expect(archiveStudioProject).toHaveBeenCalledWith("learner-a", "app_a");
   });

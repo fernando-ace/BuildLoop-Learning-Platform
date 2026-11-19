@@ -13,10 +13,10 @@ vi.mock("@/lib/platform/repository", async (importOriginal) => ({
 }));
 
 const payload = { appId: "app_12345678-1234-1234-1234-123456789abc", project: { name: "Study tracker", user: "Students", problem: "They lose track of practice", why: "Study time matters", behavior: "Add a topic", constraints: "Phone friendly", inScope: ["Track a topic"], laterIdeas: ["Share with friends"] }, mode: "initial", version: 1, instruction: "Build a simple topic tracker", observations: [], feedback: [] };
-function request(body: unknown, headers: Record<string, string> = {}, url = "http://localhost/api/studio/build") {
+function request(body: unknown, headers: Record<string, string> = {}, url = "http://localhost:3000/api/studio/build") {
   vi.stubEnv("BUILDLOOP_AUTH_MODE", "test"); vi.stubEnv("BUILDLOOP_TEST_AUTH_SECRET", "unit-test-secret-with-at-least-32-characters");
   const cookie = `${testCookieName()}=${issueTestSession("test-owner")}`;
-  return new Request(url, { method: "POST", headers: { host: "localhost", origin: "http://localhost", "content-type": "application/json", cookie, ...headers }, body: JSON.stringify(body) });
+  return new Request(url, { method: "POST", headers: { host: "localhost:3000", origin: "http://localhost:3000", "content-type": "application/json", cookie, ...headers }, body: JSON.stringify(body) });
 }
 
 afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); consumeLimit.mockReset().mockResolvedValue({ allowed: true, retryAfterSeconds: 60 }); withLock.mockReset().mockImplementation(async (_key: string, operation: () => Promise<unknown>) => ({ acquired: true, value: await operation() })); getApplication.mockReset().mockResolvedValue({ platform_role: "owner" }); saveVersion.mockReset(); });
@@ -38,7 +38,7 @@ describe("Studio Builder route", () => {
   });
 
   it("requires a trusted platform session before building", async () => {
-    const unauthorized = new Request("http://localhost/api/studio/build", { method: "POST", headers: { host: "localhost", origin: "http://localhost", "content-type": "application/json" }, body: JSON.stringify(payload) });
+    const unauthorized = new Request("http://localhost:3000/api/studio/build", { method: "POST", headers: { host: "localhost:3000", origin: "http://localhost:3000", "content-type": "application/json" }, body: JSON.stringify(payload) });
     expect((await POST(unauthorized)).status).toBe(401);
   });
 
